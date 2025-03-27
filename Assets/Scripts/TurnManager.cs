@@ -8,6 +8,7 @@ public class TurnManager : MonoBehaviour
     public static TurnManager Instance;
 
     public HandManager handManager;
+    public PlayedCardsManager playedCardsManager;
     public GameObject resultTextObject;
     public Text resultText;
     public Text turnText;
@@ -104,6 +105,8 @@ public class TurnManager : MonoBehaviour
         selectedNumberCard = null;
         selectedOperatorCard = null;
         selectedSkillCard = null;
+        playedCardsManager.ClearCards(true);
+        playedCardsManager.ClearCards(false);
         UpdateUI();
     }
 
@@ -303,7 +306,8 @@ public class TurnManager : MonoBehaviour
         {
             type = "Skill",
             playerIndex = playerIndex,
-            skillCard = selectedSkillCard
+            playedCards = new List<Card> { selectedSkillCard },  // 使用playedCards列表
+            skillCard = selectedSkillCard  // 保持兼容性
         };
 
         // 发送技能数据
@@ -322,17 +326,21 @@ public class TurnManager : MonoBehaviour
 
     private void ProcessSkillResult(NetworkMessage skillData)
     {
-        string skillText = $"玩家{skillData.playerIndex + 1} 使用了 {skillData.skillCard.GetSkillName()}";
+        // 获取技能卡（从playedCards或skillCard字段）
+        Card skillCard = skillData.playedCards?.Count > 0 ? skillData.playedCards[0] : skillData.skillCard;
+        if (skillCard == null) return;
+
+        string skillText = $"玩家{skillData.playerIndex + 1} 使用了 {skillCard.GetSkillName()}";
         ShowResult(skillText);
 
         // 记录技能卡使用信息
         string cardInfo = skillData.playerIndex == playerIndex ? 
-            $"我使用技能卡: [{skillData.skillCard.GetSkillName()}]" :
-            $"对手使用技能卡: [{skillData.skillCard.GetSkillName()}]";
+            $"我使用技能卡: [{skillCard.GetSkillName()}]" :
+            $"对手使用技能卡: [{skillCard.GetSkillName()}]";
         Debug.Log(cardInfo);
 
         // 处理技能效果
-        switch (skillData.skillCard.skillType)
+        switch (skillCard.skillType)
         {
             case SkillType.Freeze:
                 if (skillData.playerIndex != playerIndex)
@@ -375,7 +383,7 @@ public class TurnManager : MonoBehaviour
             hasDrawnCard = false;
             
             // 如果是冻结卡，不切换回合（让当前玩家继续出牌）
-            if (skillData.skillCard.skillType != SkillType.Freeze)
+            if (skillCard.skillType != SkillType.Freeze)
             {
                 gameState.NextTurn();
             }
@@ -383,7 +391,7 @@ public class TurnManager : MonoBehaviour
         else
         {
             // 如果是对手的回合，且不是冻结卡，才切换回合
-            if (skillData.skillCard.skillType != SkillType.Freeze)
+            if (skillCard.skillType != SkillType.Freeze)
             {
                 gameState.SetCurrentTurn((skillData.playerIndex + 1) % gameState.PlayerCount);
             }
@@ -396,36 +404,75 @@ public class TurnManager : MonoBehaviour
 
     private void ProcessTurn()
     {
-        if (selectedNumberCard == null || selectedOperatorCard == null) return;
+        if (selectedNumberCard == null) return;
 
         isProcessingTurn = true;
-        int playerValue = selectedNumberCard.numberValue;
-        int result;
+        List<Card> playedCards = new List<Card>();
+
+        // 添加数字牌
+        if (selectedNumberCard != null)
+        {
+            playedCards.Add(selectedNumberCard);
+            handManager.RemoveCard(selectedNumberCard);
+            playedCardsManager.AddCard(selectedNumberCard, true);
+        }
+
+        // 添加运算符牌
+        if (selectedOperatorCard != null)
+        {
+            playedCards.Add(selectedOperatorCard);
+            handManager.RemoveCard(selectedOperatorCard);
+            playedCardsManager.AddCard(selectedOperatorCard, true);
+        }
+
+        // 添加技能牌
+        if (selectedSkillCard != null)
+        {
+            playedCards.Add(selectedSkillCard);
+            handManager.RemoveCard(selectedSkillCard);
+            playedCardsManager.AddCard(selectedSkillCard, true);
+        }
 
         // 检查当前领域效果
         GameField currentField = CardDeckManager.Instance.GetCurrentField();
         if (currentField == GameField.Square)
         {
             // 平方领域：数字自动平方
-            playerValue = playerValue * playerValue;
+            foreach (var card in playedCards)
+            {
+                if (card.type == CardType.Number)
+                {
+                    card.numberValue = card.numberValue * card.numberValue;
+                }
+            }
         }
         else if (currentField == GameField.SquareRoot)
         {
             // 根号领域：数字自动取平方根
-            playerValue = (int)Mathf.Sqrt(playerValue);
+            foreach (var card in playedCards)
+            {
+                if (card.type == CardType.Number)
+                {
+                    card.numberValue = (int)Mathf.Sqrt(card.numberValue);
+                }
+            }
         }
 
         // 获取当前玩家的分数
         int currentScore = gameState.GetScore(playerIndex);
 
         // 处理不同类型的运算符
-        if (selectedOperatorCard.type == CardType.ExtraOperator)
+        int result = 0;
+        foreach (var card in playedCards)
         {
-            result = selectedOperatorCard.Calculate(currentScore);
-        }
-        else
-        {
-            result = selectedOperatorCard.Calculate(currentScore, playerValue);
+            if (card.type == CardType.ExtraOperator)
+            {
+                result = card.Calculate(currentScore);
+            }
+            else
+            {
+                result = card.Calculate(currentScore, card.numberValue);
+            }
         }
 
         // 创建回合数据
@@ -433,8 +480,7 @@ public class TurnManager : MonoBehaviour
         {
             type = "Turn",
             playerIndex = playerIndex,
-            numberCard = selectedNumberCard,
-            operatorCard = selectedOperatorCard,
+            playedCards = playedCards,
             result = result,
             currentNumber = result,
             currentField = currentField
@@ -472,6 +518,7 @@ public class TurnManager : MonoBehaviour
             {
                 type = "GameOver",
                 playerIndex = gameState.CurrentPlayerTurn,
+                result = currentNumber,
                 playerScores = new int[] { gameState.GetScore(0), gameState.GetScore(1) }
             };
 
@@ -488,25 +535,31 @@ public class TurnManager : MonoBehaviour
 
     private void ProcessTurnResult(NetworkMessage turnData)
     {
+        if (turnData == null) return;
+
+        // 处理对手打出的牌
+        if (turnData.playedCards != null)
+        {
+            foreach (var card in turnData.playedCards)
+            {
+                playedCardsManager.AddCard(card, false);
+            }
+        }
+
         // 保存最后一次操作，用于记录
         lastTurnData = turnData;
 
         // 更新当前数值
-        currentNumber = turnData.currentNumber;
+        currentNumber = turnData.result;
 
         // 记录出牌信息
         string cardInfo = "";
         if (turnData.playerIndex == playerIndex)
         {
             cardInfo = "我出牌: ";
-            if (selectedSkillCard != null)
+            foreach (var card in turnData.playedCards)
             {
-                cardInfo += $"[技能卡: {selectedSkillCard.GetSkillName()}] ";
-            }
-            if (selectedNumberCard != null && selectedOperatorCard != null)
-            {
-                cardInfo += $"[数字卡: {selectedNumberCard.numberValue}] ";
-                cardInfo += $"[运算符卡: {selectedOperatorCard.GetOperatorSymbol()}]";
+                cardInfo += $"[{card.GetDisplayText()}] ";
             }
             
             // 记录计算过程
@@ -518,25 +571,25 @@ public class TurnManager : MonoBehaviour
             GameField currentField = CardDeckManager.Instance.GetCurrentField();
             if (currentField == GameField.Square)
             {
-                calculation = $"领域效果(平方): {selectedNumberCard.numberValue} -> {selectedNumberCard.numberValue * selectedNumberCard.numberValue}\n";
+                calculation = $"领域效果(平方): {turnData.playedCards[0].numberValue} -> {turnData.playedCards[0].numberValue * turnData.playedCards[0].numberValue}\n";
             }
             else if (currentField == GameField.SquareRoot)
             {
-                calculation = $"领域效果(根号): {selectedNumberCard.numberValue} -> {(int)Mathf.Sqrt(selectedNumberCard.numberValue)}\n";
+                calculation = $"领域效果(根号): {turnData.playedCards[0].numberValue} -> {(int)Mathf.Sqrt(turnData.playedCards[0].numberValue)}\n";
             }
             
             // 记录计算过程
-            if (selectedNumberCard != null && selectedOperatorCard != null)
+            if (turnData.playedCards.Count > 0)
             {
-                if (selectedOperatorCard.type == CardType.Operator && 
-                    (selectedOperatorCard.operatorType == OperatorType.Square || 
-                     selectedOperatorCard.operatorType == OperatorType.SquareRoot))
+                if (turnData.playedCards[0].type == CardType.Operator && 
+                    (turnData.playedCards[0].operatorType == OperatorType.Square || 
+                     turnData.playedCards[0].operatorType == OperatorType.SquareRoot))
                 {
-                    calculation += $"计算过程: {currentScore} {selectedOperatorCard.GetOperatorSymbol()} = {result}";
+                    calculation += $"计算过程: {currentScore} {turnData.playedCards[0].GetOperatorSymbol()} = {result}";
                 }
                 else
                 {
-                    calculation += $"计算过程: {currentScore} {selectedOperatorCard.GetOperatorSymbol()} {selectedNumberCard.numberValue} = {result}";
+                    calculation += $"计算过程: {currentScore} {turnData.playedCards[0].GetOperatorSymbol()} {turnData.playedCards[0].numberValue} = {result}";
                 }
             }
             
@@ -545,14 +598,9 @@ public class TurnManager : MonoBehaviour
         else
         {
             cardInfo = $"对手出牌: ";
-            if (turnData.skillCard != null)
+            foreach (var card in turnData.playedCards)
             {
-                cardInfo += $"[技能卡: {turnData.skillCard.GetSkillName()}] ";
-            }
-            if (turnData.numberCard != null && turnData.operatorCard != null)
-            {
-                cardInfo += $"[数字卡: {turnData.numberCard.numberValue}] ";
-                cardInfo += $"[运算符卡: {turnData.operatorCard.GetOperatorSymbol()}]";
+                cardInfo += $"[{card.GetDisplayText()}] ";
             }
             
             // 记录对手的计算过程
@@ -562,25 +610,25 @@ public class TurnManager : MonoBehaviour
             // 检查领域效果
             if (turnData.currentField == GameField.Square)
             {
-                calculation = $"领域效果(平方): {turnData.numberCard.numberValue} -> {turnData.numberCard.numberValue * turnData.numberCard.numberValue}\n";
+                calculation = $"领域效果(平方): {turnData.playedCards[0].numberValue} -> {turnData.playedCards[0].numberValue * turnData.playedCards[0].numberValue}\n";
             }
             else if (turnData.currentField == GameField.SquareRoot)
             {
-                calculation = $"领域效果(根号): {turnData.numberCard.numberValue} -> {(int)Mathf.Sqrt(turnData.numberCard.numberValue)}\n";
+                calculation = $"领域效果(根号): {turnData.playedCards[0].numberValue} -> {(int)Mathf.Sqrt(turnData.playedCards[0].numberValue)}\n";
             }
             
             // 记录计算过程
-            if (turnData.numberCard != null && turnData.operatorCard != null)
+            if (turnData.playedCards.Count > 0)
             {
-                if (turnData.operatorCard.type == CardType.Operator && 
-                    (turnData.operatorCard.operatorType == OperatorType.Square || 
-                     turnData.operatorCard.operatorType == OperatorType.SquareRoot))
+                if (turnData.playedCards[0].type == CardType.Operator && 
+                    (turnData.playedCards[0].operatorType == OperatorType.Square || 
+                     turnData.playedCards[0].operatorType == OperatorType.SquareRoot))
                 {
-                    calculation += $"计算过程: {opponentScore} {turnData.operatorCard.GetOperatorSymbol()} = {turnData.result}";
+                    calculation += $"计算过程: {opponentScore} {turnData.playedCards[0].GetOperatorSymbol()} = {turnData.result}";
                 }
                 else
                 {
-                    calculation += $"计算过程: {opponentScore} {turnData.operatorCard.GetOperatorSymbol()} {turnData.numberCard.numberValue} = {turnData.result}";
+                    calculation += $"计算过程: {opponentScore} {turnData.playedCards[0].GetOperatorSymbol()} {turnData.playedCards[0].numberValue} = {turnData.result}";
                 }
             }
             
@@ -588,15 +636,15 @@ public class TurnManager : MonoBehaviour
         }
 
         string resultText;
-        if (turnData.operatorCard != null && turnData.operatorCard.type == CardType.Operator && 
-            (turnData.operatorCard.operatorType == OperatorType.Square || 
-             turnData.operatorCard.operatorType == OperatorType.SquareRoot))
+        if (turnData.playedCards.Count > 0 && turnData.playedCards[0].type == CardType.Operator && 
+            (turnData.playedCards[0].operatorType == OperatorType.Square || 
+             turnData.playedCards[0].operatorType == OperatorType.SquareRoot))
         {
-            resultText = $"玩家{turnData.playerIndex + 1}: {turnData.operatorCard.GetOperatorSymbol()}{gameState.GetScore(turnData.playerIndex)} = {turnData.result}";
+            resultText = $"玩家{turnData.playerIndex + 1}: {turnData.playedCards[0].GetOperatorSymbol()}{gameState.GetScore(turnData.playerIndex)} = {turnData.result}";
         }
-        else if (turnData.numberCard != null && turnData.operatorCard != null)
+        else if (turnData.playedCards.Count > 0)
         {
-            resultText = $"玩家{turnData.playerIndex + 1}: {gameState.GetScore(turnData.playerIndex)} {turnData.operatorCard.GetOperatorSymbol()} {turnData.numberCard.numberValue} = {turnData.result}";
+            resultText = $"玩家{turnData.playerIndex + 1}: {gameState.GetScore(turnData.playerIndex)} {turnData.playedCards[0].GetOperatorSymbol()} {turnData.playedCards[0].numberValue} = {turnData.result}";
         }
         else
         {
@@ -608,17 +656,9 @@ public class TurnManager : MonoBehaviour
         if (turnData.playerIndex == playerIndex)
         {
             // 移除使用的卡牌
-            if (selectedNumberCard != null)
+            foreach (var card in turnData.playedCards)
             {
-                handManager.RemoveCard(selectedNumberCard);
-            }
-            if (selectedOperatorCard != null)
-            {
-                handManager.RemoveCard(selectedOperatorCard);
-            }
-            if (selectedSkillCard != null)
-            {
-                handManager.RemoveCard(selectedSkillCard);
+                handManager.RemoveCard(card);
             }
 
             // 清除选择
@@ -799,6 +839,7 @@ public class TurnManager : MonoBehaviour
         {
             type = "GameOver",
             playerIndex = player1Diff < player2Diff ? 0 : (player2Diff < player1Diff ? 1 : -1),
+            result = currentNumber,
             playerScores = new int[] { player1Score, player2Score }
         };
 
