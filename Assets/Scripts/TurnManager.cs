@@ -18,6 +18,10 @@ public class TurnManager : MonoBehaviour
     public Button drawCardButton;
     public Button playCardButton;
     public float resultDisplayTime = 2f;
+    
+    // 修改为共用结果面板
+    public GameObject gameResultPanel;
+    public Text gameResultText;
 
     private Card selectedNumberCard;
     private Card selectedOperatorCard;
@@ -65,6 +69,12 @@ public class TurnManager : MonoBehaviour
         currentNumber = 1; // 初始值为1
         gameEnded = false;
         hasDrawnCard = false;
+        
+        // 确保胜利和失败窗口隐藏
+        if (gameResultPanel != null)
+        {
+            gameResultPanel.SetActive(false);
+        }
 
         if (playerIndex == 0) // 主机生成目标数
         {
@@ -683,6 +693,25 @@ public class TurnManager : MonoBehaviour
         if (result >= targetNumber)
         {
             Debug.Log($"玩家{playerIndex + 1}获胜！得分：{result}");
+            
+            // 发送游戏结束消息
+            NetworkMessage gameOverMsg = new NetworkMessage
+            {
+                type = "GameOver",
+                playerIndex = playerIndex,
+                result = result,
+                playerScores = new int[] { gameState.GetScore(0), gameState.GetScore(1) }
+            };
+
+            if (playerIndex == 0)
+            {
+                TcpHost.Instance.SendTurnData(gameOverMsg);
+            }
+            else
+            {
+                TcpClientConnection.Instance.SendTurnData(gameOverMsg);
+            }
+            
             EndGame();
             return;
         }
@@ -731,14 +760,14 @@ public class TurnManager : MonoBehaviour
         // 更新玩家分数 - player1ScoreText显示当前玩家的分数，player2ScoreText显示对手的分数
         if (player1ScoreText != null)
         {
-            player1ScoreText.text = $"我方: {gameState.GetScore(playerIndex)}";
+            player1ScoreText.text = $"{gameState.GetScore(playerIndex)}";
         }
 
         if (player2ScoreText != null)
         {
             // 计算对手的索引
             int opponentIndex = (playerIndex + 1) % 2;
-            player2ScoreText.text = $"对手: {gameState.GetScore(opponentIndex)}";
+            player2ScoreText.text = $"{gameState.GetScore(opponentIndex)}";
         }
 
         // 如果是玩家回合且没有被冻结，启用按钮
@@ -890,6 +919,18 @@ public class TurnManager : MonoBehaviour
             gameEnded = true;
             string winnerText = $"玩家{message.playerIndex + 1}获胜！达到目标数{targetNumber}";
             ShowResult(winnerText);
+            
+            // 设置结果面板显示失败信息
+            if (gameResultPanel != null && gameResultText != null)
+            {
+                gameResultText.text = $"你输了！\n你的分数: {gameState.GetScore(playerIndex)}\n对手分数: {message.result}\n目标数: {targetNumber}";
+                
+                // 在短暂延迟后显示结果面板
+                StartCoroutine(ShowGameResultPanelDelayed(1.5f));
+            }
+            
+            // 禁用游戏按钮
+            DisableGameButtons();
         }
 
         isProcessingTurn = false;
@@ -909,9 +950,20 @@ public class TurnManager : MonoBehaviour
     private void EndGame()
     {
         gameEnded = true;
+        
+        // 显示结果文本
         string winnerText = $"玩家{playerIndex + 1}获胜！达到目标数{targetNumber}";
         ShowResult(winnerText);
-
+        
+        // 设置结果面板显示胜利信息
+        if (gameResultPanel != null && gameResultText != null)
+        {
+            gameResultText.text = $"你赢了！\n最终分数: {gameState.GetScore(playerIndex)}\n目标数: {targetNumber}";
+            
+            // 在短暂延迟后显示结果面板
+            StartCoroutine(ShowGameResultPanelDelayed(1.5f));
+        }
+        
         // 发送游戏结束消息
         NetworkMessage gameOverMsg = new NetworkMessage
         {
@@ -928,6 +980,28 @@ public class TurnManager : MonoBehaviour
         else
         {
             TcpClientConnection.Instance.SendTurnData(gameOverMsg);
+        }
+        
+        // 禁用游戏按钮
+        DisableGameButtons();
+    }
+    
+    private IEnumerator ShowGameResultPanelDelayed(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        gameResultPanel.SetActive(true);
+    }
+    
+    private void DisableGameButtons()
+    {
+        if (drawCardButton != null)
+        {
+            drawCardButton.interactable = false;
+        }
+        
+        if (playCardButton != null)
+        {
+            playCardButton.interactable = false;
         }
     }
 
@@ -978,7 +1052,22 @@ public class TurnManager : MonoBehaviour
         if (turnData.result >= targetNumber)
         {
             Debug.Log($"玩家{turnData.playerIndex + 1}获胜！得分：{turnData.result}");
-            EndGame();
+            
+            // 只有当前玩家获胜时才调用EndGame()
+            if (turnData.playerIndex == playerIndex)
+            {
+                EndGame();
+            }
+            // 如果是对手获胜，等待GameOver消息处理
+            else
+            {
+                // 显示临时提示
+                ShowResult($"玩家{turnData.playerIndex + 1}获胜！达到目标数{targetNumber}");
+                gameEnded = true;
+                
+                // 禁用游戏按钮
+                DisableGameButtons();
+            }
             return;
         }
 
@@ -1011,5 +1100,25 @@ public class TurnManager : MonoBehaviour
     public void ForceFixFreezeIssue()
     {
         ForceSetCurrentTurn(playerIndex);
+    }
+    
+    // 重置游戏按钮点击事件
+    public void OnRestartButtonClicked()
+    {
+        // 隐藏结果面板
+        if (gameResultPanel != null)
+        {
+            gameResultPanel.SetActive(false);
+        }
+        
+        // 重置游戏状态
+        gameEnded = false;
+        
+        // 重新初始化游戏
+        Initialize(playerIndex, gameState.PlayerCount);
+        
+        // 生成新的初始手牌
+        List<Card> initialHand = CardDeckManager.Instance.GenerateInitialHand();
+        StartGame(initialHand);
     }
 }
