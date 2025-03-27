@@ -3,9 +3,13 @@ using UnityEngine.UI;
 
 public class CardUI : MonoBehaviour
 {
-    public Text numberText;
-    public Text operatorText;
+    public Sprite numberSprite;
+    public Sprite skillSprite;
+    public Sprite operatorSprite;
+
+    public Text cardText;
     public Image cardBackground;
+
     public Color selectedColor = new Color(1f, 1f, 0f, 0.5f);
     public Color normalColor = new Color(1f, 1f, 1f, 1f);
 
@@ -19,13 +23,18 @@ public class CardUI : MonoBehaviour
 
         if (card.type == CardType.Number)
         {
-            numberText.text = card.numberValue.ToString();
-            operatorText.gameObject.SetActive(false);
+            cardText.text = card.numberValue.ToString();
+            cardBackground.sprite = numberSprite;
         }
-        else
+        else if (card.type == CardType.Skill)
         {
-            numberText.gameObject.SetActive(false);
-            operatorText.text = card.GetOperatorSymbol();
+            cardText.text = card.GetSkillName();
+            cardBackground.sprite = skillSprite;
+        }
+        else if (card.type == CardType.Operator || card.type == CardType.ExtraOperator)
+        {
+            cardText.text = card.GetOperatorSymbol();
+            cardBackground.sprite = operatorSprite;
         }
 
         // Add click handler

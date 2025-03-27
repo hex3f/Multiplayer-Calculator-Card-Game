@@ -11,11 +11,12 @@ public class HandManager : MonoBehaviour
     public float cardScale = 1f;
     public float selectedCardScale = 1.2f;
     public float cardMoveSpeed = 10f;
+    public float selectedCardOffset = 50f;
 
     private List<Card> hand = new List<Card>();
     private List<GameObject> cardObjects = new List<GameObject>();
     private System.Action<Card> cardClickCallback;
-    private Card selectedCard;
+    private HashSet<Card> selectedCards = new HashSet<Card>();
     private bool isUpdatingPositions = false;
 
     public void ShowHand(List<Card> cards, System.Action<Card> onCardClick)
@@ -38,23 +39,18 @@ public class HandManager : MonoBehaviour
 
     public void AddCard(Card card)
     {
+        // 先复位所有卡牌
+        foreach (var cardObj in cardObjects)
+        {
+            Vector3 pos = cardObj.transform.localPosition;
+            cardObj.transform.localPosition = new Vector3(pos.x, 0, pos.z);
+        }
+
         hand.Add(card);
-        GameObject cardObj = Instantiate(cardPrefab, handContainer);
-        cardObjects.Add(cardObj);
+        GameObject cardObjNew = Instantiate(cardPrefab, handContainer);
+        cardObjects.Add(cardObjNew);
 
-        // 设置卡牌文本
-        Text cardText = cardObj.GetComponentInChildren<Text>();
-        if (cardText != null)
-        {
-            cardText.text = card.GetDisplayText();
-        }
-
-        // 添加点击事件
-        Button button = cardObj.GetComponent<Button>();
-        if (button != null)
-        {
-            button.onClick.AddListener(() => OnCardClicked(card));
-        }
+        cardObjNew.GetComponent<CardUI>().SetCard(card, OnCardClicked);
 
         // 更新卡牌位置
         UpdateCardPositions();
@@ -74,42 +70,48 @@ public class HandManager : MonoBehaviour
 
     public void SelectCard(Card card)
     {
-        // 如果选择了同一张卡牌，不做任何改变
-        if (selectedCard == card)
+        // 如果卡牌已经被选中，不做任何改变
+        if (selectedCards.Contains(card))
         {
             return;
         }
 
-        // 取消之前选中卡牌的选择
-        if (selectedCard != null)
-        {
-            int prevIndex = hand.IndexOf(selectedCard);
-            if (prevIndex != -1)
-            {
-                cardObjects[prevIndex].transform.localScale = Vector3.one * cardScale;
-            }
-        }
-
         // 选择新卡牌
-        selectedCard = card;
+        selectedCards.Add(card);
         int index = hand.IndexOf(card);
         if (index != -1)
         {
-            cardObjects[index].transform.localScale = Vector3.one * selectedCardScale;
+            // 将卡牌向前移动
+            Vector3 currentPos = cardObjects[index].transform.localPosition;
+            cardObjects[index].transform.localPosition = new Vector3(currentPos.x, currentPos.y + selectedCardOffset, currentPos.z);
         }
     }
 
     public void DeselectCard()
     {
-        if (selectedCard != null)
+        // 取消所有选中卡牌的选择
+        foreach (var cardObj in cardObjects)
         {
-            int index = hand.IndexOf(selectedCard);
+            Vector3 pos = cardObj.transform.localPosition;
+            cardObj.transform.localPosition = new Vector3(pos.x, 0, pos.z);
+        }
+        selectedCards.Clear();
+        UpdateCardPositions();
+    }
+
+    public void DeselectCard(Card card)
+    {
+        // 取消指定卡牌的选择
+        if (selectedCards.Remove(card))
+        {
+            int index = hand.IndexOf(card);
             if (index != -1)
             {
-                cardObjects[index].transform.localScale = Vector3.one * cardScale;
+                Vector3 pos = cardObjects[index].transform.localPosition;
+                cardObjects[index].transform.localPosition = new Vector3(pos.x, 0, pos.z);
             }
-            selectedCard = null;
         }
+        UpdateCardPositions();
     }
 
     private void OnCardClicked(Card card)
@@ -125,7 +127,8 @@ public class HandManager : MonoBehaviour
         float startX = -(hand.Count - 1) * cardSpacing / 2;
         for (int i = 0; i < cardObjects.Count; i++)
         {
-            Vector3 targetPosition = new Vector3(startX + i * cardSpacing, 0, 0);
+            float targetY = selectedCards.Contains(hand[i]) ? selectedCardOffset : 0;
+            Vector3 targetPosition = new Vector3(startX + i * cardSpacing, targetY, 0);
             cardObjects[i].transform.localPosition = targetPosition;
         }
 
@@ -137,6 +140,11 @@ public class HandManager : MonoBehaviour
         return hand;
     }
 
+    public List<Card> GetSelectedCards()
+    {
+        return new List<Card>(selectedCards);
+    }
+
     private void ClearHand()
     {
         foreach (var cardObj in cardObjects)
@@ -145,6 +153,6 @@ public class HandManager : MonoBehaviour
         }
         cardObjects.Clear();
         hand.Clear();
-        selectedCard = null;
+        selectedCards.Clear();
     }
 }

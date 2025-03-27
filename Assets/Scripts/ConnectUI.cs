@@ -20,6 +20,7 @@ public class ConnectUI : MonoBehaviour
     public GameObject resultTextObject;
     public Text resultText;
     public Button drawCardButton;
+    public Button playCardButton;
     public HandManager handManager;
     public GameObject cardPrefab;
     public Transform handContainer;
@@ -74,6 +75,7 @@ public class ConnectUI : MonoBehaviour
                 targetNumberText,
                 resultText,
                 drawCardButton,
+                playCardButton,
                 player1ScoreText,
                 player2ScoreText
             );
@@ -146,7 +148,8 @@ public class ConnectUI : MonoBehaviour
             player2ScoreText: player2ScoreText,
             targetNumberText: targetNumberText,
             resultText: resultText,
-            drawCardButton: drawCardButton
+            drawCardButton: drawCardButton,
+            playCardButton: playCardButton
         );
         
         // 隐藏连接面板，显示游戏面板

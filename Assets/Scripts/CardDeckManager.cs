@@ -40,19 +40,17 @@ public class CardDeckManager : MonoBehaviour
             }
         }
 
-        // 添加运算符牌
+        // 添加运算符牌（包括特殊运算符牌）
         for (int i = 0; i < 8; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Add });
         for (int i = 0; i < 6; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Subtract });
         for (int i = 0; i < 8; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Multiply });
         for (int i = 0; i < 4; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Divide });
+        for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Square });
+        for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.SquareRoot });
 
         // 添加技能牌
         for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.Skill, skillType = SkillType.Freeze });
         for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.Skill, skillType = SkillType.Mirror });
-
-        // 添加特殊牌
-        for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.ExtraOperator, extraOperatorType = ExtraOperatorType.Square });
-        for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.ExtraOperator, extraOperatorType = ExtraOperatorType.SquareRoot });
 
         ShuffleDeck();
     }
@@ -97,30 +95,36 @@ public class CardDeckManager : MonoBehaviour
         // 抽取2张运算牌
         for (int i = 0; i < 2; i++)
         {
-            Card card = DrawCard();
-            while (card != null && card.type != CardType.Operator)
+            Card operatorCard = DrawCard();
+            while (operatorCard != null && operatorCard.type != CardType.Operator)
             {
                 // 如果不是运算牌，放回牌堆底部
-                deck.Add(card);
-                card = DrawCard();
+                deck.Add(operatorCard);
+                operatorCard = DrawCard();
             }
-            if (card != null)
+            if (operatorCard != null)
             {
-                hand.Add(card);
+                hand.Add(operatorCard);
             }
         }
 
-        // 抽取1张特殊牌（技能牌或特殊运算符牌）
-        Card specialCard = DrawCard();
-        while (specialCard != null && specialCard.type != CardType.Skill && specialCard.type != CardType.ExtraOperator)
+        // 抽取1张技能牌
+        Card skillCard = DrawCard();
+        while (skillCard != null && skillCard.type != CardType.Skill)
         {
-            // 如果不是特殊牌，放回牌堆底部
-            deck.Add(specialCard);
-            specialCard = DrawCard();
+            // 如果不是技能牌，放回牌堆底部
+            deck.Add(skillCard);
+            skillCard = DrawCard();
         }
-        if (specialCard != null)
+        if (skillCard != null)
         {
-            hand.Add(specialCard);
+            hand.Add(skillCard);
+        }
+
+        Debug.Log($"生成初始手牌: {hand.Count}张");
+        foreach (var card in hand)
+        {
+            Debug.Log($"手牌: {card.GetDisplayText()}");
         }
 
         return hand;
