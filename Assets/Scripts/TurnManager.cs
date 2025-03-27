@@ -225,8 +225,27 @@ public class TurnManager : MonoBehaviour
         if (playCardButton != null)
         {
             // 只要是我的回合且没有被冻结，就可以出牌（包括不出牌）
-            bool canPlay = gameState.IsPlayerTurn(playerIndex) && !isProcessingTurn && !isFrozen;
+            bool canPlay = gameState.IsPlayerTurn(playerIndex) && !isFrozen;
+            
+            // 如果正在处理回合，禁用按钮
+            if (isProcessingTurn)
+            {
+                canPlay = false;
+            }
+            
             playCardButton.interactable = canPlay;
+            
+            if (canPlay)
+            {
+                Debug.Log("出牌按钮已启用");
+            }
+            else
+            {
+                string reason = !gameState.IsPlayerTurn(playerIndex) ? "非当前回合" : 
+                               (isFrozen ? "被冻结" : 
+                               (isProcessingTurn ? "正在处理回合" : "未知原因"));
+                Debug.Log($"出牌按钮已禁用，原因: {reason}");
+            }
         }
     }
 
@@ -259,7 +278,10 @@ public class TurnManager : MonoBehaviour
             }
 
             // 处理本地跳过回合
-            gameState.NextTurn();
+            int nextPlayerIndex = (playerIndex + 1) % gameState.PlayerCount;
+            gameState.SetCurrentTurn(nextPlayerIndex);
+            Debug.Log($"手动跳过回合，切换到玩家{nextPlayerIndex + 1}的回合");
+            
             hasDrawnCard = false; // 重置抽牌状态
             UpdateUI();
             isProcessingTurn = false;
@@ -446,9 +468,32 @@ public class TurnManager : MonoBehaviour
         switch (skillCard.skillType)
         {
             case SkillType.Freeze:
-                if (skillData.playerIndex != playerIndex)
+                if (skillData.playerIndex == playerIndex)
                 {
-                    // 如果是对手使用冻结，标记自己被冻结
+                    // 如果是自己使用冻结，对方应该被冻结
+                    // 发送冻结状态给对方
+                    NetworkMessage freezeResponse = new NetworkMessage
+                    {
+                        type = "FreezeStatus",
+                        playerIndex = (playerIndex + 1) % 2, // 对方的索引
+                        isFrozen = true
+                    };
+                    
+                    // 发送冻结状态
+                    if (playerIndex == 0)
+                    {
+                        TcpHost.Instance.SendTurnData(freezeResponse);
+                    }
+                    else
+                    {
+                        TcpClientConnection.Instance.SendTurnData(freezeResponse);
+                    }
+                    
+                    Debug.Log($"我使用冻结卡，对手(玩家{(playerIndex + 1) % 2 + 1})将被冻结");
+                }
+                else
+                {
+                    // 如果是对手使用冻结，自己被冻结
                     isFrozen = true;
                     Debug.Log($"玩家{playerIndex + 1}被冻结，下回合将被跳过");
                     
@@ -503,30 +548,21 @@ public class TurnManager : MonoBehaviour
             handManager.DeselectCard();
             hasDrawnCard = false;
             
-            // 如果是冻结卡，不切换回合（让当前玩家继续出牌）
-            if (skillCard.skillType == SkillType.Freeze)
-            {
-                // 不切换回合，让当前玩家继续出牌
-                isProcessingTurn = false;
-                UpdateUI();
-                return;
-            }
-            else
-            {
-                // 使用其他技能牌后，切换到对手回合
-                int nextPlayerIndex = (playerIndex + 1) % gameState.PlayerCount;
-                gameState.SetCurrentTurn(nextPlayerIndex);
-                Debug.Log($"技能使用完毕，切换到玩家{nextPlayerIndex + 1}的回合");
-            }
+            // 确保当前回合仍然是自己的
+            gameState.SetCurrentTurn(playerIndex);
+            
+            // 无论是什么技能卡，都不切换回合（让当前玩家继续出牌）
+            isProcessingTurn = false;
+            UpdateUI();
+            UpdatePlayCardButtonState(); // 再次更新按钮状态确保可交互
+            Debug.Log("使用技能牌后继续保持回合，可以继续出牌");
+            return;
         }
         else
         {
-            // 如果是对手的回合，且不是冻结卡，切换到我方回合
-            if (skillCard.skillType != SkillType.Freeze)
-            {
-                gameState.SetCurrentTurn(playerIndex);
-                Debug.Log($"对手使用技能后，切换到我方(玩家{playerIndex + 1})的回合");
-            }
+            // 如果是对手使用技能牌，不影响当前回合
+            // 对手回合继续进行，不用做任何处理
+            Debug.Log("对手使用技能牌，等待对手行动");
         }
 
         UpdateUI();
@@ -709,6 +745,7 @@ public class TurnManager : MonoBehaviour
         if (drawCardButton != null)
         {
             drawCardButton.interactable = canInteract && !hasDrawnCard;
+            Debug.Log($"抽牌按钮状态: {drawCardButton.interactable} (回合:{gameState.IsPlayerTurn(playerIndex)}, 冻结:{isFrozen}, 已抽牌:{hasDrawnCard})");
         }
 
         UpdatePlayCardButtonState();
@@ -718,10 +755,17 @@ public class TurnManager : MonoBehaviour
         {
             StartCoroutine(AutoSkipFrozenTurn());
         }
+        
+        Debug.Log($"界面已更新 - 当前回合:{gameState.CurrentPlayerTurn} 我的索引:{playerIndex} 是否我的回合:{gameState.IsPlayerTurn(playerIndex)} 冻结:{isFrozen}");
     }
     
     private IEnumerator AutoSkipFrozenTurn()
     {
+        if (!isFrozen || !gameState.IsPlayerTurn(playerIndex) || isProcessingTurn)
+        {
+            yield break; // 如果不满足条件，直接退出
+        }
+        
         isProcessingTurn = true;
         ShowResult($"玩家{playerIndex + 1}被冻结，跳过回合");
         
@@ -746,7 +790,12 @@ public class TurnManager : MonoBehaviour
         
         // 重置冻结状态
         isFrozen = false;
-        gameState.NextTurn();
+        
+        // 计算下一个玩家的索引
+        int nextPlayerIndex = (playerIndex + 1) % gameState.PlayerCount;
+        gameState.SetCurrentTurn(nextPlayerIndex);
+        Debug.Log($"因冻结跳过回合，切换到玩家{nextPlayerIndex + 1}的回合");
+        
         hasDrawnCard = false;
         UpdateUI();
         isProcessingTurn = false;
@@ -782,7 +831,17 @@ public class TurnManager : MonoBehaviour
         }
         else if (message.type == "Turn")
         {
+            // 如果对方出牌后轮到我的回合，但我被冻结，自动跳过
+            bool shouldSkipAfterProcess = message.playerIndex != playerIndex && isFrozen;
+            
+            // 先处理对方的出牌
             ProcessTurnResult(message);
+            
+            // 如果我被冻结且轮到我的回合，自动跳过
+            if (shouldSkipAfterProcess && gameState.IsPlayerTurn(playerIndex))
+            {
+                StartCoroutine(AutoSkipFrozenTurn());
+            }
         }
         else if (message.type == "Skill")
         {
@@ -801,14 +860,26 @@ public class TurnManager : MonoBehaviour
             gameState.SetCurrentTurn(playerIndex);
             hasDrawnCard = false;
             UpdateUI();
+            
+            // 如果我方被冻结，也要自动跳过回合
+            if (isFrozen)
+            {
+                StartCoroutine(AutoSkipFrozenTurn());
+            }
         }
         else if (message.type == "FreezeStatus")
         {
             // 更新冻结状态同步
-            if (message.playerIndex != playerIndex)
+            if (message.playerIndex == playerIndex)
             {
                 isFrozen = message.isFrozen;
-                Debug.Log($"收到冻结状态更新，对手的冻结状态：{message.isFrozen}");
+                Debug.Log($"收到冻结状态更新，我的冻结状态：{message.isFrozen}");
+                
+                // 如果当前是我的回合且被冻结，自动跳过
+                if (gameState.IsPlayerTurn(playerIndex) && isFrozen)
+                {
+                    StartCoroutine(AutoSkipFrozenTurn());
+                }
             }
         }
         else if (message.type == "GameOver")
@@ -820,7 +891,12 @@ public class TurnManager : MonoBehaviour
         }
 
         isProcessingTurn = false;
-        Debug.Log($"处理完毕，当前回合玩家索引：{gameState.CurrentPlayerTurn}, 我的索引：{playerIndex}");
+        
+        // 确保UI状态更新
+        UpdateUI();
+        UpdatePlayCardButtonState();
+        
+        Debug.Log($"处理完毕，当前回合玩家索引：{gameState.CurrentPlayerTurn}, 我的索引：{playerIndex}, 是否是我的回合：{gameState.IsPlayerTurn(playerIndex)}, 冻结状态：{isFrozen}");
     }
 
     public int GetTargetNumber()
@@ -913,5 +989,25 @@ public class TurnManager : MonoBehaviour
 
         // 更新UI
         UpdateUI();
+    }
+
+    // 强制设置当前回合（仅用于调试/修复冻结问题）
+    public void ForceSetCurrentTurn(int forcePlayerIndex)
+    {
+        gameState.SetCurrentTurn(forcePlayerIndex);
+        hasDrawnCard = false; // 重置抽牌状态
+        isFrozen = false; // 确保没有冻结状态
+        isProcessingTurn = false; // 确保不在处理回合中
+        
+        UpdateUI();
+        UpdatePlayCardButtonState();
+        
+        Debug.Log($"已强制设置当前回合为玩家{forcePlayerIndex + 1}");
+    }
+    
+    // 在控制台中调用此方法以修复冻结问题：TurnManager.Instance.ForceFixFreezeIssue();
+    public void ForceFixFreezeIssue()
+    {
+        ForceSetCurrentTurn(playerIndex);
     }
 }
