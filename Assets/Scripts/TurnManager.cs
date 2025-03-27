@@ -22,6 +22,11 @@ public class TurnManager : MonoBehaviour
     // 修改为共用结果面板
     public GameObject gameResultPanel;
     public Text gameResultText;
+    
+    // 添加三个Text用于显示牌库数量
+    public Text numberCardCountText;  // 显示数字牌剩余数量
+    public Text operatorCardCountText; // 显示运算符牌剩余数量
+    public Text skillCardCountText;    // 显示技能牌剩余数量
 
     private Card selectedNumberCard;
     private Card selectedOperatorCard;
@@ -390,41 +395,73 @@ public class TurnManager : MonoBehaviour
         // 为简化实现，我们暂时还是默认抽最大数量的牌
         int cardsToDraw = maxCardsToDraw;
         
-        List<Card> drawnCards = new List<Card>();
-        
-        // 摸牌
-        for (int i = 0; i < cardsToDraw; i++)
-        {
-            Card newCard = CardDeckManager.Instance.DrawCard();
-            if (newCard != null)
-            {
-                handManager.AddCard(newCard);
-                drawnCards.Add(newCard);
-                Debug.Log($"抽到新牌: {newCard.GetDisplayText()}");
-            }
-        }
-        
-        // 检查手牌上限
-        CheckHandLimit();
-        
-        hasDrawnCard = true; // 标记已经摸过牌
-        
-        // 发送抽牌消息给对手
-        NetworkMessage drawMsg = new NetworkMessage
-        {
-            type = "DrawCard",
-            playerIndex = playerIndex,
-            cardsDrawn = drawnCards.Count,
-            drawnCards = drawnCards // 使用新字段传递抽到的卡牌
-        };
-
+        // 如果是主机，处理抽牌逻辑
         if (playerIndex == 0)
         {
+            // 创建临时列表记录抽到的牌
+            List<Card> drawnCards = new List<Card>();
+            
+            // 主机直接从牌堆抽牌
+            for (int i = 0; i < cardsToDraw; i++)
+            {
+                Card newCard = CardDeckManager.Instance.DrawCard();
+                if (newCard != null)
+                {
+                    handManager.AddCard(newCard);
+                    drawnCards.Add(newCard);
+                    Debug.Log($"抽到新牌: {newCard.GetDisplayText()}");
+                }
+            }
+            
+            // 检查手牌上限
+            CheckHandLimit();
+            
+            hasDrawnCard = true; // 标记已经摸过牌
+            
+            // 发送抽牌消息给客户端
+            NetworkMessage drawMsg = new NetworkMessage
+            {
+                type = "DrawCard",
+                playerIndex = playerIndex,
+                cardsDrawn = drawnCards.Count,
+                drawnCards = drawnCards // 使用新字段传递抽到的卡牌
+            };
+            
             TcpHost.Instance.SendTurnData(drawMsg);
+            
+            // 同步一次牌库数量
+            NetworkMessage deckUpdateMsg = new NetworkMessage
+            {
+                type = "DeckUpdate",
+                numberCardCount = CardDeckManager.Instance.GetNumberCardCount(),
+                operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount(),
+                skillCardCount = CardDeckManager.Instance.GetSkillCardCount()
+            };
+            TcpHost.Instance.SendTurnData(deckUpdateMsg);
+            
+            // 立即更新UI显示最新的牌库数量
+            UpdateUI();
         }
         else
         {
+            // 客户端发送抽牌请求给主机
+            NetworkMessage drawMsg = new NetworkMessage
+            {
+                type = "DrawCard",
+                playerIndex = playerIndex,
+                cardsDrawn = cardsToDraw, // 请求抽牌数量
+            };
+            
             TcpClientConnection.Instance.SendTurnData(drawMsg);
+            
+            // 客户端仅发送请求，不自行抽牌
+            // 所有卡牌信息将由主机通过网络消息发送过来
+            
+            // 标记已抽牌，避免重复请求
+            hasDrawnCard = true;
+            
+            // 显示抽牌中提示
+            ShowResult("正在抽牌...");
         }
 
         isProcessingTurn = false;
@@ -437,18 +474,38 @@ public class TurnManager : MonoBehaviour
 
         isProcessingTurn = true;
 
+        Card tempSkillCard = selectedSkillCard;
+        selectedSkillCard = null; // 清空选中的技能牌引用
+
+        // 移除使用的技能卡并添加到历史区域
+        handManager.RemoveCard(tempSkillCard);
+        playedCardsManager.AddCard(tempSkillCard, true);
+
+        // 立即更新UI以反映卡牌数量变化
+        UpdateUI();
+
         NetworkMessage skillData = new NetworkMessage
         {
             type = "Skill",
             playerIndex = playerIndex,
-            playedCards = new List<Card> { selectedSkillCard },  // 使用playedCards列表
-            skillCard = selectedSkillCard  // 保持兼容性
+            playedCards = new List<Card> { tempSkillCard },  // 使用playedCards列表
+            skillCard = tempSkillCard  // 保持兼容性
         };
 
         // 发送技能数据
         if (playerIndex == 0)
         {
             TcpHost.Instance.SendTurnData(skillData);
+            
+            // 如果是主机，同步一次牌库数量
+            NetworkMessage deckUpdateMsg = new NetworkMessage
+            {
+                type = "DeckUpdate",
+                numberCardCount = CardDeckManager.Instance.GetNumberCardCount(),
+                operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount(),
+                skillCardCount = CardDeckManager.Instance.GetSkillCardCount()
+            };
+            TcpHost.Instance.SendTurnData(deckUpdateMsg);
         }
         else
         {
@@ -540,15 +597,7 @@ public class TurnManager : MonoBehaviour
         // 如果是自己使用的技能牌
         if (skillData.playerIndex == playerIndex)
         {
-            // 移除使用的技能卡
-            if (selectedSkillCard != null)
-            {
-                handManager.RemoveCard(selectedSkillCard);
-                // 将技能卡添加到历史牌区域显示
-                playedCardsManager.AddCard(selectedSkillCard, true);
-                selectedSkillCard = null;
-            }
-
+            // 移除使用的技能卡已经在ProcessSkill中处理，这里不需要重复
             // 如果同时选择了数字牌和运算符牌，继续处理
             if (selectedNumberCard != null && selectedOperatorCard != null)
             {
@@ -669,6 +718,9 @@ public class TurnManager : MonoBehaviour
         // 计算下一个玩家的索引
         int nextPlayerIndex = (playerIndex + 1) % gameState.PlayerCount;
 
+        // 先更新UI，确保卡牌数量显示正确
+        UpdateUI();
+        
         // 准备网络消息
         NetworkMessage message = new NetworkMessage
         {
@@ -684,6 +736,16 @@ public class TurnManager : MonoBehaviour
         if (playerIndex == 0)
         {
             TcpHost.Instance.SendTurnData(message);
+            
+            // 如果是主机，同步一次牌库数量
+            NetworkMessage deckUpdateMsg = new NetworkMessage
+            {
+                type = "DeckUpdate",
+                numberCardCount = CardDeckManager.Instance.GetNumberCardCount(),
+                operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount(),
+                skillCardCount = CardDeckManager.Instance.GetSkillCardCount()
+            };
+            TcpHost.Instance.SendTurnData(deckUpdateMsg);
         }
         else
         {
@@ -696,9 +758,6 @@ public class TurnManager : MonoBehaviour
         selectedSkillCard = null;
         handManager.DeselectCard();
         hasDrawnCard = false;
-        
-        // 先更新UI显示分数
-        UpdateUI();
         
         // 延迟检查胜利条件，给玩家时间看到分数变化
         StartCoroutine(DelayedVictoryCheck(result));
@@ -791,6 +850,9 @@ public class TurnManager : MonoBehaviour
             player2ScoreText.text = $"{gameState.GetScore(opponentIndex)}";
         }
 
+        // 更新卡牌数量显示
+        UpdateCardCountTexts();
+        
         // 如果是玩家回合且没有被冻结，启用按钮
         bool canInteract = gameState.IsPlayerTurn(playerIndex) && !isFrozen;
         
@@ -809,6 +871,36 @@ public class TurnManager : MonoBehaviour
         }
         
         Debug.Log($"界面已更新 - 当前回合:{gameState.CurrentPlayerTurn} 我的索引:{playerIndex} 是否我的回合:{gameState.IsPlayerTurn(playerIndex)} 冻结:{isFrozen}");
+    }
+    
+    // 更新卡牌数量显示
+    private void UpdateCardCountTexts()
+    {
+        // 只有主机才会重新计算牌库数量
+        if (playerIndex == 0)
+        {
+            int numberCount = CardDeckManager.Instance.GetNumberCardCount();
+            int operatorCount = CardDeckManager.Instance.GetOperatorCardCount();
+            int skillCount = CardDeckManager.Instance.GetSkillCardCount();
+            
+            Debug.Log($"[主机] 更新卡牌数量显示 - 数字:{numberCount} 运算符:{operatorCount} 技能:{skillCount}");
+            
+            if (numberCardCountText != null)
+            {
+                numberCardCountText.text = $"数字牌: {numberCount}";
+            }
+            
+            if (operatorCardCountText != null)
+            {
+                operatorCardCountText.text = $"运算符: {operatorCount}";
+            }
+            
+            if (skillCardCountText != null)
+            {
+                skillCardCountText.text = $"技能牌: {skillCount}";
+            }
+        }
+        // 客户端不主动更新，只依赖服务器发来的数据
     }
     
     private IEnumerator AutoSkipFrozenTurn()
@@ -872,6 +964,32 @@ public class TurnManager : MonoBehaviour
 
         string msgInfo = $"处理对手消息: {message.type}, 来自玩家: {message.playerIndex}";
         Debug.Log(msgInfo);
+        
+        // 更新卡牌数量信息（如果有）
+        if (message.numberCardCount > 0 || message.operatorCardCount > 0 || message.skillCardCount > 0)
+        {
+            // 记录接收到的卡牌数量信息
+            Debug.Log($"[玩家{playerIndex+1}] 收到卡牌数量同步 - 数字:{message.numberCardCount} 运算符:{message.operatorCardCount} 技能:{message.skillCardCount}");
+            
+            // 由于服务器同步的是卡牌数量，客户端不需要自己计算，直接显示收到的数值
+            if (numberCardCountText != null)
+            {
+                numberCardCountText.text = $"数字牌: {message.numberCardCount}";
+            }
+            
+            if (operatorCardCountText != null)
+            {
+                operatorCardCountText.text = $"运算符: {message.operatorCardCount}";
+            }
+            
+            if (skillCardCountText != null)
+            {
+                skillCardCountText.text = $"技能牌: {message.skillCardCount}";
+            }
+            
+            // 更新本地CardDeckManager中的牌库计数(仅做显示用，不影响实际牌库)
+            CardDeckManager.Instance.SyncCardCounts(message.numberCardCount, message.operatorCardCount, message.skillCardCount);
+        }
 
         if (message.type == "TargetNumber")
         {
@@ -905,6 +1023,20 @@ public class TurnManager : MonoBehaviour
             // 不再立即切换回合，让对手在抽牌后仍可以继续操作
             UpdateUI();
         }
+        else if (message.type == "DrawCardResponse")
+        {
+            Debug.Log($"收到抽牌响应：抽到{message.cardsDrawn}张");
+            // 显示抽牌结果
+            if (message.cardsDrawn > 0)
+            {
+                ShowResult($"抽到{message.cardsDrawn}张牌");
+            }
+            else
+            {
+                ShowResult("牌库已空");
+            }
+            UpdateUI();
+        }
         else if (message.type == "SkipTurn")
         {
             Debug.Log($"对手跳过回合(玩家{message.playerIndex + 1})");
@@ -933,6 +1065,12 @@ public class TurnManager : MonoBehaviour
                     StartCoroutine(AutoSkipFrozenTurn());
                 }
             }
+        }
+        else if (message.type == "DeckUpdate")
+        {
+            // 处理牌库数量更新消息
+            Debug.Log($"[玩家{playerIndex+1}] 收到牌库数量更新消息: 数字:{message.numberCardCount} 运算符:{message.operatorCardCount} 技能:{message.skillCardCount}");
+            UpdateCardCountDisplay(message.numberCardCount, message.operatorCardCount, message.skillCardCount);
         }
         else if (message.type == "GameOver")
         {
@@ -1158,5 +1296,38 @@ public class TurnManager : MonoBehaviour
         // 生成新的初始手牌
         List<Card> initialHand = CardDeckManager.Instance.GenerateInitialHand();
         StartGame(initialHand);
+    }
+
+    // 直接更新卡牌数量显示，不重新计算
+    public void UpdateCardCountDisplay(int numberCount, int operatorCount, int skillCount)
+    {
+        Debug.Log($"[玩家{playerIndex+1}] 直接更新卡牌数量显示 - 数字:{numberCount} 运算符:{operatorCount} 技能:{skillCount}");
+        
+        if (numberCardCountText != null)
+        {
+            numberCardCountText.text = $"数字牌: {numberCount}";
+        }
+        
+        if (operatorCardCountText != null)
+        {
+            operatorCardCountText.text = $"运算符: {operatorCount}";
+        }
+        
+        if (skillCardCountText != null)
+        {
+            skillCardCountText.text = $"技能牌: {skillCount}";
+        }
+    }
+
+    // 添加卡牌到手牌（供客户端使用）
+    public void AddCardToHand(Card card)
+    {
+        if (card != null)
+        {
+            handManager.AddCard(card);
+            
+            // 检查手牌上限
+            CheckHandLimit();
+        }
     }
 }

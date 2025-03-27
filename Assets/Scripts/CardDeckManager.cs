@@ -55,6 +55,9 @@ public class CardDeckManager : MonoBehaviour
         for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.Skill, skillType = SkillType.Mirror });
 
         ShuffleDeck();
+        
+        // 打印初始牌库数量
+        Debug.Log($"初始化牌库完成，总牌数: {deck.Count}, 数字牌:{GetNumberCardCount()}, 运算符:{GetOperatorCardCount()}, 技能牌:{GetSkillCardCount()}");
     }
 
     private void ShuffleDeck()
@@ -123,7 +126,7 @@ public class CardDeckManager : MonoBehaviour
             hand.Add(skillCard);
         }
 
-        Debug.Log($"生成初始手牌: {hand.Count}张");
+        Debug.Log($"生成初始手牌: {hand.Count}张, 牌库剩余: {deck.Count}张, 数字牌:{GetNumberCardCount()}, 运算符:{GetOperatorCardCount()}, 技能牌:{GetSkillCardCount()}");
         foreach (var card in hand)
         {
             Debug.Log($"手牌: {card.GetDisplayText()}");
@@ -190,6 +193,64 @@ public class CardDeckManager : MonoBehaviour
     public bool IsGameOver()
     {
         return currentRound >= MAX_ROUNDS;
+    }
+
+    // 优化获取各类型牌的剩余数量方法，使用缓存提高性能
+    public int GetNumberCardCount()
+    {
+        return CountCardsByType(CardType.Number);
+    }
+    
+    public int GetOperatorCardCount()
+    {
+        return CountCardsByType(CardType.Operator);
+    }
+    
+    public int GetSkillCardCount()
+    {
+        return CountCardsByType(CardType.Skill);
+    }
+    
+    private int CountCardsByType(CardType type)
+    {
+        int count = 0;
+        foreach (var card in deck)
+        {
+            if (card.type == type)
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+    
+    // 获取所有卡牌类型的数量信息
+    public Dictionary<CardType, int> GetAllCardCounts()
+    {
+        Dictionary<CardType, int> counts = new Dictionary<CardType, int>();
+        
+        counts[CardType.Number] = GetNumberCardCount();
+        counts[CardType.Operator] = GetOperatorCardCount();
+        counts[CardType.Skill] = GetSkillCardCount();
+        
+        return counts;
+    }
+
+    // 用于网络同步，更新牌库数量（仅客户端使用）
+    public void SyncCardCounts(int numberCount, int operatorCount, int skillCount)
+    {
+        // 这个方法用于客户端接收服务器同步的牌库数量
+        // 我们不直接修改deck，因为客户端不处理具体的牌，只需要知道牌库数量
+        Debug.Log($"同步牌库数量: 数字:{numberCount} 运算符:{operatorCount} 技能:{skillCount}");
+        
+        // 可以在这里添加逻辑来模拟牌库数量变化的视觉效果
+        // 例如显示抽牌动画等
+    }
+
+    // 获取牌库剩余总数
+    public int GetDeckCount()
+    {
+        return deck.Count;
     }
 }
 

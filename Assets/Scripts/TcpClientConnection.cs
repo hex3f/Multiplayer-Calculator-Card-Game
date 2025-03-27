@@ -91,6 +91,12 @@ public class TcpClientConnection : MonoBehaviour
                 List<Card> initialHand = CardDeckManager.Instance.GenerateInitialHand();
                 ConnectUI.Instance.OnGameStart(initialHand);
                 break;
+            case "DeckUpdate":
+                // 处理牌库数量更新
+                Debug.Log($"[客户端] 收到牌库数量更新: 数字牌:{message.numberCardCount} 运算符:{message.operatorCardCount} 技能牌:{message.skillCardCount}");
+                CardDeckManager.Instance.SyncCardCounts(message.numberCardCount, message.operatorCardCount, message.skillCardCount);
+                TurnManager.Instance.UpdateCardCountDisplay(message.numberCardCount, message.operatorCardCount, message.skillCardCount);
+                break;
             case "TargetNumber":
             case "RequestTargetNumber":
             case "Turn":
@@ -99,6 +105,21 @@ public class TcpClientConnection : MonoBehaviour
             case "SkipTurn":
             case "FreezeStatus":
             case "GameOver":
+                TurnManager.Instance.OnOpponentTurn(message);
+                break;
+            case "DrawCardResponse":
+                // 处理抽牌响应，添加服务器发送的卡牌到手牌
+                Debug.Log($"[客户端] 收到抽牌响应，抽到{message.cardsDrawn}张牌");
+                if (message.drawnCards != null && message.drawnCards.Count > 0)
+                {
+                    foreach (var card in message.drawnCards)
+                    {
+                        // 将卡牌添加到客户端手牌中
+                        TurnManager.Instance.AddCardToHand(card);
+                        Debug.Log($"添加卡牌到手牌: {card.GetDisplayText()}");
+                    }
+                }
+                // 然后处理常规操作
                 TurnManager.Instance.OnOpponentTurn(message);
                 break;
             default:
@@ -113,6 +134,9 @@ public class TcpClientConnection : MonoBehaviour
 
         try
         {
+            // 客户端不再计算卡牌数量，而是使用主机同步的数量
+            // 这里不设置numberCardCount等字段，由主机来更新
+            
             string json = JsonUtility.ToJson(message);
             byte[] data = Encoding.UTF8.GetBytes(json);
             stream.Write(data, 0, data.Length);

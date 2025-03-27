@@ -105,6 +105,9 @@ public class TcpHost : MonoBehaviour
                             {
                                 Debug.Log("所有玩家已准备，开始游戏");
                                 
+                                // 初始化牌堆（确保只初始化一次）
+                                CardDeckManager.Instance.InitializeDeck();
+                                
                                 // 发送游戏开始信号给客户端
                                 NetworkMessage startMsg = new NetworkMessage
                                 {
@@ -113,9 +116,25 @@ public class TcpHost : MonoBehaviour
                                 };
                                 SendTurnData(startMsg);
                                 
-                                // 生成初始手牌并发送给主机
+                                // 主机玩家生成初始手牌
                                 List<Card> initialHand = CardDeckManager.Instance.GenerateInitialHand();
+                                
+                                // 模拟客户端抽牌以正确计算牌库
+                                List<Card> clientInitialHand = CardDeckManager.Instance.GenerateInitialHand();
+                                Debug.Log($"[主机] 为客户端生成初始手牌，牌库剩余: {CardDeckManager.Instance.GetDeckCount()}张");
+                                
+                                // 通知UI系统开始游戏
                                 ConnectUI.Instance.OnGameStart(initialHand);
+                                
+                                // 发送一次牌库数量更新
+                                NetworkMessage deckUpdateMsg = new NetworkMessage
+                                {
+                                    type = "DeckUpdate",
+                                    numberCardCount = CardDeckManager.Instance.GetNumberCardCount(),
+                                    operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount(),
+                                    skillCardCount = CardDeckManager.Instance.GetSkillCardCount()
+                                };
+                                SendTurnData(deckUpdateMsg);
                             }
                         }
                         else if (message.type == "RequestTargetNumber")
@@ -131,7 +150,49 @@ public class TcpHost : MonoBehaviour
                         }
                         else if (message.type == "DrawCard")
                         {
-                            // 处理抽牌消息
+                            // 主机作为权威来源，处理客户端抽牌请求
+                            Debug.Log($"[主机] 处理玩家{message.playerIndex+1}抽牌请求，数量:{message.cardsDrawn}");
+                            
+                            // 创建临时列表记录抽到的牌
+                            List<Card> drawnCards = new List<Card>();
+                            
+                            // 从牌库抽取请求的牌数
+                            for (int i = 0; i < message.cardsDrawn; i++)
+                            {
+                                Card card = CardDeckManager.Instance.DrawCard();
+                                if (card != null)
+                                {
+                                    drawnCards.Add(card);
+                                    Debug.Log($"为玩家{message.playerIndex+1}抽出卡牌: {card.GetDisplayText()}");
+                                }
+                            }
+                            
+                            // 构建包含抽出卡牌的响应消息
+                            NetworkMessage drawResponse = new NetworkMessage
+                            {
+                                type = "DrawCardResponse",
+                                playerIndex = message.playerIndex,
+                                cardsDrawn = drawnCards.Count,
+                                drawnCards = drawnCards,
+                                numberCardCount = CardDeckManager.Instance.GetNumberCardCount(),
+                                operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount(),
+                                skillCardCount = CardDeckManager.Instance.GetSkillCardCount()
+                            };
+                            
+                            // 发送抽牌结果给客户端
+                            SendTurnData(drawResponse);
+                            
+                            // 同步一次牌库数量给所有玩家
+                            NetworkMessage deckUpdateMsg = new NetworkMessage
+                            {
+                                type = "DeckUpdate",
+                                numberCardCount = CardDeckManager.Instance.GetNumberCardCount(),
+                                operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount(),
+                                skillCardCount = CardDeckManager.Instance.GetSkillCardCount()
+                            };
+                            SendTurnData(deckUpdateMsg);
+                            
+                            // 处理本地的消息显示
                             TurnManager.Instance.OnOpponentTurn(message);
                         }
                         else if (message.type == "SkipTurn")
@@ -168,6 +229,14 @@ public class TcpHost : MonoBehaviour
 
         try
         {
+            // 主机作为权威来源，更新卡牌数量信息
+            message.numberCardCount = CardDeckManager.Instance.GetNumberCardCount();
+            message.operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount();
+            message.skillCardCount = CardDeckManager.Instance.GetSkillCardCount();
+            
+            // 记录日志以便调试
+            Debug.Log($"[主机] 发送卡牌数量 - 数字:{message.numberCardCount} 运算符:{message.operatorCardCount} 技能:{message.skillCardCount}");
+            
             string json = JsonUtility.ToJson(message);
             byte[] data = Encoding.UTF8.GetBytes(json);
             
