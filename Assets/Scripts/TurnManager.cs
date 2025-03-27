@@ -459,7 +459,8 @@ public class TurnManager : MonoBehaviour
         }
 
         // 处理不同类型的运算符
-        int result = currentNumber;
+        int currentPlayerScore = gameState.GetScore(playerIndex); // 获取当前玩家的分数
+        int result = currentPlayerScore; // 从当前玩家的分数开始计算
         foreach (var card in playedCards)
         {
             if (card.type == CardType.Number || card.type == CardType.Operator)
@@ -516,8 +517,8 @@ public class TurnManager : MonoBehaviour
         // 保存最后一次操作，用于记录
         lastTurnData = turnData;
 
-        // 更新当前数值
-        currentNumber = turnData.result;
+        // 更新当前玩家的分数
+        gameState.AddScore(turnData.playerIndex, turnData.result);
 
         // 记录出牌信息
         string cardInfo;
@@ -544,15 +545,16 @@ public class TurnManager : MonoBehaviour
             // 记录计算过程
             if (turnData.playedCards.Count > 0)
             {
+                int baseScore = gameState.GetScore(turnData.playerIndex); // 使用当前玩家的基础分数
                 if (turnData.playedCards[0].type == CardType.Operator && 
                     (turnData.playedCards[0].operatorType == OperatorType.Square || 
                      turnData.playedCards[0].operatorType == OperatorType.SquareRoot))
                 {
-                    calculation += $"计算过程: {currentNumber} {turnData.playedCards[0].GetOperatorSymbol()} = {turnData.result}";
+                    calculation += $"计算过程: {baseScore} {turnData.playedCards[0].GetOperatorSymbol()} = {turnData.result}";
                 }
                 else
                 {
-                    calculation += $"计算过程: {currentNumber} {turnData.playedCards[0].GetOperatorSymbol()} {turnData.playedCards[0].numberValue} = {turnData.result}";
+                    calculation += $"计算过程: {baseScore} {turnData.playedCards[0].GetOperatorSymbol()} {turnData.playedCards[0].numberValue} = {turnData.result}";
                 }
             }
         }
@@ -577,15 +579,16 @@ public class TurnManager : MonoBehaviour
             // 记录计算过程
             if (turnData.playedCards.Count > 0)
             {
+                int baseScore = gameState.GetScore(turnData.playerIndex); // 使用对手的基础分数
                 if (turnData.playedCards[0].type == CardType.Operator && 
                     (turnData.playedCards[0].operatorType == OperatorType.Square || 
                      turnData.playedCards[0].operatorType == OperatorType.SquareRoot))
                 {
-                    calculation += $"计算过程: {currentNumber} {turnData.playedCards[0].GetOperatorSymbol()} = {turnData.result}";
+                    calculation += $"计算过程: {baseScore} {turnData.playedCards[0].GetOperatorSymbol()} = {turnData.result}";
                 }
                 else
                 {
-                    calculation += $"计算过程: {currentNumber} {turnData.playedCards[0].GetOperatorSymbol()} {turnData.playedCards[0].numberValue} = {turnData.result}";
+                    calculation += $"计算过程: {baseScore} {turnData.playedCards[0].GetOperatorSymbol()} {turnData.playedCards[0].numberValue} = {turnData.result}";
                 }
             }
         }
@@ -593,11 +596,8 @@ public class TurnManager : MonoBehaviour
         Debug.Log(cardInfo);
         Debug.Log(calculation);
 
-        // 更新游戏状态
-        gameState.AddScore(turnData.playerIndex, turnData.result);
-        
         // 检查胜利条件
-        if (currentNumber == targetNumber)
+        if (turnData.result == targetNumber)
         {
             gameEnded = true;
             string winnerText = $"玩家{turnData.playerIndex + 1}获胜！达到目标数{targetNumber}";
@@ -608,7 +608,7 @@ public class TurnManager : MonoBehaviour
             {
                 type = "GameOver",
                 playerIndex = turnData.playerIndex,
-                result = currentNumber,
+                result = turnData.result,
                 playerScores = new int[] { gameState.GetScore(0), gameState.GetScore(1) }
             };
 
