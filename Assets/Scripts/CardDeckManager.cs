@@ -160,14 +160,20 @@ public class CardDeckManager : MonoBehaviour
     public void NextRound()
     {
         currentRound++;
-        if (currentRound == 5)
+        
+        // 每5回合出现一次特殊领域（第5、10、15回合...）
+        if (currentRound % 5 == 0)
         {
-            // 第5回合随机选择一个特殊领域
-            currentField = (GameField)Random.Range(1, 4);
+            // 随机选择一个特殊领域（平方或开方）
+            int fieldType = Random.Range(1, 3); // 1=平方，2=开方
+            currentField = (GameField)fieldType;
+            Debug.Log($"第{currentRound}回合，进入特殊领域：{(fieldType == 1 ? "平方领域" : "开方领域")}");
         }
-        else if (currentRound > 5)
+        else
         {
+            // 其他回合使用普通领域
             currentField = GameField.Normal;
+            Debug.Log($"第{currentRound}回合，普通领域");
         }
     }
 
