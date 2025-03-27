@@ -8,8 +8,7 @@ public class HandManager : MonoBehaviour
     public GameObject cardPrefab;
     public RectTransform handContainer;
     public float cardScale = 1.0f;
-    public float selectedCardScale = 1.2f;
-    public float selectedCardOffset = 30f;
+    public float selectedCardOffset = 50f;
     public float animationDuration = 0.3f;
 
     private List<Card> hand = new List<Card>();
@@ -143,12 +142,10 @@ public class HandManager : MonoBehaviour
 
         for (int i = 0; i < cardObjects.Count; i++)
         {
-            float targetScale = selectedCards.Contains(hand[i]) ? selectedCardScale : cardScale;
             float targetY = selectedCards.Contains(hand[i]) ? selectedCardOffset : 0;
-
             float posX = startX + (cellSize.x + spacing.x) * i;
             targetPositions.Add(new Vector3(posX, targetY, 0));
-            targetScales.Add(targetScale);
+            targetScales.Add(cardScale);  // 始终使用固定大小
         }
 
         currentAnimation = StartCoroutine(AnimateAllCards(targetPositions, targetScales));
@@ -158,11 +155,11 @@ public class HandManager : MonoBehaviour
     private IEnumerator AnimateAllCards(List<Vector3> targetPositions, List<float> targetScales)
     {
         List<Vector3> startPositions = new List<Vector3>();
-        List<Vector3> startScales = new List<Vector3>();
         foreach (var cardObj in cardObjects)
         {
             startPositions.Add(cardObj.transform.localPosition);
-            startScales.Add(cardObj.transform.localScale);
+            // 设置固定缩放
+            cardObj.transform.localScale = Vector3.one * cardScale;
         }
 
         float elapsedTime = 0;
@@ -176,7 +173,6 @@ public class HandManager : MonoBehaviour
             for (int i = 0; i < cardObjects.Count; i++)
             {
                 cardObjects[i].transform.localPosition = Vector3.Lerp(startPositions[i], targetPositions[i], smoothT);
-                cardObjects[i].transform.localScale = Vector3.Lerp(startScales[i], Vector3.one * targetScales[i], smoothT);
             }
 
             yield return null;
@@ -185,7 +181,6 @@ public class HandManager : MonoBehaviour
         for (int i = 0; i < cardObjects.Count; i++)
         {
             cardObjects[i].transform.localPosition = targetPositions[i];
-            cardObjects[i].transform.localScale = Vector3.one * targetScales[i];
         }
 
         currentAnimation = null;
