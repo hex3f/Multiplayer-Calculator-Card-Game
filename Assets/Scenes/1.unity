@@ -1881,6 +1881,7 @@ MonoBehaviour:
   opponentOperatorCardsContainer: {fileID: 1775649087}
   opponentSkillCardsContainer: {fileID: 1327562859}
   cardPrefab: {fileID: 1651109703780908456, guid: cee96b63c10629a409bfc7c2c430a19c, type: 3}
+  cardScale: 0.8
 --- !u!1 &734920268
 GameObject:
   m_ObjectHideFlags: 0
