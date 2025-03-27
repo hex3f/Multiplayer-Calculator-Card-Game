@@ -224,14 +224,66 @@ public class TurnManager : MonoBehaviour
     {
         if (playCardButton != null)
         {
-            // 可以单独出技能牌，或者数字牌+运算符牌（可以带技能牌）
-            bool canPlay = (selectedSkillCard != null) || (selectedNumberCard != null && selectedOperatorCard != null);
-            playCardButton.interactable = canPlay && gameState.IsPlayerTurn(playerIndex) && !isProcessingTurn && !isFrozen;
+            // 只要是我的回合且没有被冻结，就可以出牌（包括不出牌）
+            bool canPlay = gameState.IsPlayerTurn(playerIndex) && !isProcessingTurn && !isFrozen;
+            playCardButton.interactable = canPlay;
         }
     }
 
     public void OnPlayCardButtonClicked()
     {
+        if (!gameState.IsPlayerTurn(playerIndex) || isProcessingTurn || isFrozen)
+        {
+            return;
+        }
+
+        isProcessingTurn = true;
+
+        // 如果没有选择任何牌，直接跳过回合
+        if (selectedNumberCard == null && selectedOperatorCard == null && selectedSkillCard == null)
+        {
+            // 发送跳过回合消息
+            NetworkMessage skipMsg = new NetworkMessage
+            {
+                type = "SkipTurn",
+                playerIndex = playerIndex
+            };
+
+            if (playerIndex == 0)
+            {
+                TcpHost.Instance.SendTurnData(skipMsg);
+            }
+            else
+            {
+                TcpClientConnection.Instance.SendTurnData(skipMsg);
+            }
+
+            // 处理本地跳过回合
+            gameState.NextTurn();
+            UpdateUI();
+            isProcessingTurn = false;
+            return;
+        }
+
+        // 如果只选择了数字牌或运算符牌，取消选择并返回
+        if ((selectedNumberCard != null && selectedOperatorCard == null) || 
+            (selectedNumberCard == null && selectedOperatorCard != null))
+        {
+            // 取消选择
+            if (selectedNumberCard != null)
+            {
+                handManager.DeselectCard(selectedNumberCard);
+                selectedNumberCard = null;
+            }
+            if (selectedOperatorCard != null)
+            {
+                handManager.DeselectCard(selectedOperatorCard);
+                selectedOperatorCard = null;
+            }
+            isProcessingTurn = false;
+            return;
+        }
+
         // 如果选择了技能牌，先处理技能
         if (selectedSkillCard != null)
         {
@@ -395,7 +447,14 @@ public class TurnManager : MonoBehaviour
             hasDrawnCard = false;
             
             // 如果是冻结卡，不切换回合（让当前玩家继续出牌）
-            if (skillCard.skillType != SkillType.Freeze)
+            if (skillCard.skillType == SkillType.Freeze)
+            {
+                // 不切换回合，让当前玩家继续出牌
+                isProcessingTurn = false;
+                UpdateUI();
+                return;
+            }
+            else
             {
                 gameState.NextTurn();
             }
@@ -754,6 +813,13 @@ public class TurnManager : MonoBehaviour
                 };
                 TcpHost.Instance.SendTurnData(targetMsg);
             }
+        }
+        else if (message.type == "SkipTurn")
+        {
+            // 处理跳过回合消息
+            Debug.Log($"玩家{message.playerIndex + 1}跳过回合");
+            gameState.NextTurn();
+            UpdateUI();
         }
         else
         {
