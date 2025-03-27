@@ -14,4 +14,5 @@ public class NetworkMessage
     public bool isSkillSuccess;
     public int[] playerScores;
     public bool skipTurn;
+    public int cardsDrawn;
 }

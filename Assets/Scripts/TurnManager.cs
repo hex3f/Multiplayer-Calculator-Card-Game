@@ -255,6 +255,14 @@ public class TurnManager : MonoBehaviour
             return;
         }
 
+        // 检查当前手牌数量
+        int currentHandCount = handManager.GetHand().Count;
+        if (currentHandCount >= 6)
+        {
+            Debug.Log("手牌已达到上限(6张)，无法摸牌");
+            return;
+        }
+
         isProcessingTurn = true;
 
         // 清除所有选中状态
@@ -263,8 +271,11 @@ public class TurnManager : MonoBehaviour
         selectedSkillCard = null;
         handManager.DeselectCard();
 
-        // 抽两张新牌
-        for (int i = 0; i < 2; i++)
+        // 计算可以摸的牌数
+        int cardsToDraw = Mathf.Min(2, 6 - currentHandCount);
+        
+        // 摸牌
+        for (int i = 0; i < cardsToDraw; i++)
         {
             Card newCard = CardDeckManager.Instance.DrawCard();
             if (newCard != null)
@@ -280,7 +291,8 @@ public class TurnManager : MonoBehaviour
         NetworkMessage drawMsg = new NetworkMessage
         {
             type = "DrawCard",
-            playerIndex = playerIndex
+            playerIndex = playerIndex,
+            cardsDrawn = cardsToDraw // 添加摸牌数量信息
         };
 
         if (playerIndex == 0)
@@ -672,7 +684,16 @@ public class TurnManager : MonoBehaviour
                 fieldStatus = " (根号领域)";
                 break;
         }
-        turnText.text = $"当前回合: 玩家{gameState.CurrentPlayerTurn + 1}{status}{fieldStatus}";
+        
+        // 修改回合文本显示逻辑
+        if (gameState.IsPlayerTurn(playerIndex))
+        {
+            turnText.text = $"你的回合{status}{fieldStatus}";
+        }
+        else
+        {
+            turnText.text = $"对手回合{status}{fieldStatus}";
+        }
         
         // 更新分数显示
         player1ScoreText.text = $"{gameState.GetScore(playerIndex)}";
@@ -682,11 +703,6 @@ public class TurnManager : MonoBehaviour
         if (CardDeckManager.Instance.GetCurrentRound() > 0)
         {
             targetNumberText.text += $"\n回合: {CardDeckManager.Instance.GetCurrentRound()}/10";
-        }
-
-        if (drawCardButton != null)
-        {
-            drawCardButton.interactable = gameState.IsPlayerTurn(playerIndex) && !isProcessingTurn && !isFrozen && !hasDrawnCard;
         }
 
         UpdatePlayCardButtonState();
