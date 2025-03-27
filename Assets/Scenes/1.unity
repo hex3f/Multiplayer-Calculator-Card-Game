@@ -1799,8 +1799,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2970cc4e861a5c14888ed23c3cb86b12, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MinNumber: 1000
-  MaxNumber: 10000
+  MinNumber: 100
+  MaxNumber: 200
 --- !u!114 &682637605
 MonoBehaviour:
   m_ObjectHideFlags: 0

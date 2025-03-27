@@ -728,15 +728,17 @@ public class TurnManager : MonoBehaviour
             targetNumberText.text = $"{targetNumber}";
         }
 
-        // 更新玩家分数
+        // 更新玩家分数 - player1ScoreText显示当前玩家的分数，player2ScoreText显示对手的分数
         if (player1ScoreText != null)
         {
-            player1ScoreText.text = $"{gameState.GetScore(0)}";
+            player1ScoreText.text = $"我方: {gameState.GetScore(playerIndex)}";
         }
 
         if (player2ScoreText != null)
         {
-            player2ScoreText.text = $"{gameState.GetScore(1)}";
+            // 计算对手的索引
+            int opponentIndex = (playerIndex + 1) % 2;
+            player2ScoreText.text = $"对手: {gameState.GetScore(opponentIndex)}";
         }
 
         // 如果是玩家回合且没有被冻结，启用按钮
