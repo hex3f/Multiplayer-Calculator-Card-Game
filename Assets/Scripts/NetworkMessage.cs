@@ -15,4 +15,6 @@ public class NetworkMessage
     public int[] playerScores;
     public bool skipTurn;
     public int cardsDrawn;
+    public bool isFrozen;
+    public List<Card> drawnCards;
 }

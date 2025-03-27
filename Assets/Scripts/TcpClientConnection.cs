@@ -97,6 +97,7 @@ public class TcpClientConnection : MonoBehaviour
             case "Skill":
             case "DrawCard":
             case "SkipTurn":
+            case "FreezeStatus":
                 TurnManager.Instance.OnOpponentTurn(message);
                 break;
             default:

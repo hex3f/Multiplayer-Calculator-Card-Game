@@ -139,6 +139,11 @@ public class TcpHost : MonoBehaviour
                             // 处理跳过回合消息
                             TurnManager.Instance.OnOpponentTurn(message);
                         }
+                        else if (message.type == "FreezeStatus")
+                        {
+                            // 处理冻结状态同步
+                            TurnManager.Instance.OnOpponentTurn(message);
+                        }
                         else
                         {
                             TurnManager.Instance.OnOpponentTurn(message);

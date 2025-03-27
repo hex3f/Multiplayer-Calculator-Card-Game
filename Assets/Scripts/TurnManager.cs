@@ -260,6 +260,7 @@ public class TurnManager : MonoBehaviour
 
             // 处理本地跳过回合
             gameState.NextTurn();
+            hasDrawnCard = false; // 重置抽牌状态
             UpdateUI();
             isProcessingTurn = false;
             return;
@@ -298,6 +299,33 @@ public class TurnManager : MonoBehaviour
         }
     }
 
+    // 检查手牌上限并处理
+    private void CheckHandLimit()
+    {
+        int handCount = handManager.GetHand().Count;
+        int handLimit = 6; // 手牌上限
+        
+        if (handCount > handLimit)
+        {
+            // 显示提示信息，要求玩家弃牌
+            ShowResult($"手牌超过上限({handLimit}张)，请选择弃置卡牌");
+            
+            // 理论上这里应该激活弃牌选择UI
+            // 简化处理：自动弃置最后抽到的牌
+            int cardsToDiscard = handCount - handLimit;
+            for (int i = 0; i < cardsToDiscard; i++)
+            {
+                List<Card> hand = handManager.GetHand();
+                if (hand.Count > 0)
+                {
+                    Card cardToDiscard = hand[hand.Count - 1];
+                    handManager.RemoveCard(cardToDiscard);
+                    Debug.Log($"自动弃置卡牌: {cardToDiscard.GetDisplayText()}");
+                }
+            }
+        }
+    }
+
     public void OnDrawCardButtonClicked()
     {
         if (!gameState.IsPlayerTurn(playerIndex) || isProcessingTurn || isFrozen || hasDrawnCard)
@@ -323,8 +351,14 @@ public class TurnManager : MonoBehaviour
         selectedSkillCard = null;
         handManager.DeselectCard();
 
-        // 计算可以摸的牌数
-        int cardsToDraw = Mathf.Min(2, 6 - currentHandCount);
+        // 计算最多可以摸的牌数
+        int maxCardsToDraw = Mathf.Min(2, 6 - currentHandCount);
+        
+        // 这里可以添加UI让玩家选择抽几张牌
+        // 为简化实现，我们暂时还是默认抽最大数量的牌
+        int cardsToDraw = maxCardsToDraw;
+        
+        List<Card> drawnCards = new List<Card>();
         
         // 摸牌
         for (int i = 0; i < cardsToDraw; i++)
@@ -333,9 +367,13 @@ public class TurnManager : MonoBehaviour
             if (newCard != null)
             {
                 handManager.AddCard(newCard);
+                drawnCards.Add(newCard);
                 Debug.Log($"抽到新牌: {newCard.GetDisplayText()}");
             }
         }
+        
+        // 检查手牌上限
+        CheckHandLimit();
         
         hasDrawnCard = true; // 标记已经摸过牌
         
@@ -344,7 +382,8 @@ public class TurnManager : MonoBehaviour
         {
             type = "DrawCard",
             playerIndex = playerIndex,
-            cardsDrawn = cardsToDraw // 添加摸牌数量信息
+            cardsDrawn = drawnCards.Count,
+            drawnCards = drawnCards // 使用新字段传递抽到的卡牌
         };
 
         if (playerIndex == 0)
@@ -412,6 +451,24 @@ public class TurnManager : MonoBehaviour
                     // 如果是对手使用冻结，标记自己被冻结
                     isFrozen = true;
                     Debug.Log($"玩家{playerIndex + 1}被冻结，下回合将被跳过");
+                    
+                    // 同步冻结状态回应
+                    NetworkMessage freezeResponse = new NetworkMessage
+                    {
+                        type = "FreezeStatus",
+                        playerIndex = playerIndex,
+                        isFrozen = true
+                    };
+                    
+                    // 发送冻结状态确认
+                    if (playerIndex == 0)
+                    {
+                        TcpHost.Instance.SendTurnData(freezeResponse);
+                    }
+                    else
+                    {
+                        TcpClientConnection.Instance.SendTurnData(freezeResponse);
+                    }
                 }
                 break;
 
@@ -456,15 +513,19 @@ public class TurnManager : MonoBehaviour
             }
             else
             {
-                gameState.NextTurn();
+                // 使用其他技能牌后，切换到对手回合
+                int nextPlayerIndex = (playerIndex + 1) % gameState.PlayerCount;
+                gameState.SetCurrentTurn(nextPlayerIndex);
+                Debug.Log($"技能使用完毕，切换到玩家{nextPlayerIndex + 1}的回合");
             }
         }
         else
         {
-            // 如果是对手的回合，且不是冻结卡，才切换回合
+            // 如果是对手的回合，且不是冻结卡，切换到我方回合
             if (skillCard.skillType != SkillType.Freeze)
             {
-                gameState.SetCurrentTurn((skillData.playerIndex + 1) % gameState.PlayerCount);
+                gameState.SetCurrentTurn(playerIndex);
+                Debug.Log($"对手使用技能后，切换到我方(玩家{playerIndex + 1})的回合");
             }
         }
 
@@ -548,28 +609,248 @@ public class TurnManager : MonoBehaviour
             }
         }
 
-        // 发送回合数据
-        NetworkMessage turnData = new NetworkMessage
+        // 更新玩家分数
+        gameState.AddScore(playerIndex, result);
+
+        // 计算下一个玩家的索引
+        int nextPlayerIndex = (playerIndex + 1) % gameState.PlayerCount;
+
+        // 准备网络消息
+        NetworkMessage message = new NetworkMessage
         {
             type = "Turn",
             playerIndex = playerIndex,
             playedCards = playedCards,
             result = result,
             currentNumber = result,
-            currentField = currentField
+            currentField = currentField // 同步当前领域状态
+        };
+
+        // 发送回合数据
+        if (playerIndex == 0)
+        {
+            TcpHost.Instance.SendTurnData(message);
+        }
+        else
+        {
+            TcpClientConnection.Instance.SendTurnData(message);
+        }
+
+        // 重置选择
+        selectedNumberCard = null;
+        selectedOperatorCard = null;
+        selectedSkillCard = null;
+        handManager.DeselectCard();
+        hasDrawnCard = false;
+
+        // 检查胜利条件
+        if (result >= targetNumber)
+        {
+            Debug.Log($"玩家{playerIndex + 1}获胜！得分：{result}");
+            EndGame();
+            return;
+        }
+
+        // 设置下一个玩家的回合
+        gameState.SetCurrentTurn(nextPlayerIndex);
+        Debug.Log($"回合结束，切换到玩家{nextPlayerIndex + 1}的回合");
+        
+        UpdateUI();
+        isProcessingTurn = false;
+    }
+
+    private void DrawNewCards()
+    {
+        // 抽两张新牌
+        for (int i = 0; i < 2; i++)
+        {
+            Card newCard = CardDeckManager.Instance.DrawCard();
+            if (newCard != null)
+            {
+                handManager.AddCard(newCard);
+            }
+        }
+    }
+
+    private void UpdateUI()
+    {
+        // 更新回合显示
+        string turnString = gameState.IsPlayerTurn(playerIndex) ? "你的回合" : "对手回合";
+        if (isFrozen && gameState.IsPlayerTurn(playerIndex))
+        {
+            turnString += " (已冻结)";
+        }
+        
+        if (turnText != null)
+        {
+            turnText.text = turnString;
+        }
+
+        // 更新目标数字显示
+        if (targetNumberText != null)
+        {
+            targetNumberText.text = $"{targetNumber}";
+        }
+
+        // 更新玩家分数
+        if (player1ScoreText != null)
+        {
+            player1ScoreText.text = $"{gameState.GetScore(0)}";
+        }
+
+        if (player2ScoreText != null)
+        {
+            player2ScoreText.text = $"{gameState.GetScore(1)}";
+        }
+
+        // 如果是玩家回合且没有被冻结，启用按钮
+        bool canInteract = gameState.IsPlayerTurn(playerIndex) && !isFrozen;
+        
+        if (drawCardButton != null)
+        {
+            drawCardButton.interactable = canInteract && !hasDrawnCard;
+        }
+
+        UpdatePlayCardButtonState();
+        
+        // 如果是我的回合且被冻结，自动跳过
+        if (gameState.IsPlayerTurn(playerIndex) && isFrozen && !isProcessingTurn)
+        {
+            StartCoroutine(AutoSkipFrozenTurn());
+        }
+    }
+    
+    private IEnumerator AutoSkipFrozenTurn()
+    {
+        isProcessingTurn = true;
+        ShowResult($"玩家{playerIndex + 1}被冻结，跳过回合");
+        
+        yield return new WaitForSeconds(1.5f);
+        
+        // 发送跳过回合消息
+        NetworkMessage skipMsg = new NetworkMessage
+        {
+            type = "SkipTurn",
+            playerIndex = playerIndex,
+            isFrozen = true
+        };
+        
+        if (playerIndex == 0)
+        {
+            TcpHost.Instance.SendTurnData(skipMsg);
+        }
+        else
+        {
+            TcpClientConnection.Instance.SendTurnData(skipMsg);
+        }
+        
+        // 重置冻结状态
+        isFrozen = false;
+        gameState.NextTurn();
+        hasDrawnCard = false;
+        UpdateUI();
+        isProcessingTurn = false;
+    }
+
+    private void ShowResult(string text)
+    {
+        resultText.text = text;
+        resultTextObject.SetActive(true);
+        StartCoroutine(HideResultAfterDelay());
+    }
+
+    private IEnumerator HideResultAfterDelay()
+    {
+        yield return new WaitForSeconds(resultDisplayTime);
+        resultTextObject.SetActive(false);
+    }
+
+    public void OnOpponentTurn(NetworkMessage message)
+    {
+        isProcessingTurn = true;
+
+        string msgInfo = $"处理对手消息: {message.type}, 来自玩家: {message.playerIndex}";
+        Debug.Log(msgInfo);
+
+        if (message.type == "TargetNumber")
+        {
+            SetTargetNumber(message.targetNumber);
+        }
+        else if (message.type == "GameStart")
+        {
+            // 已在HandleMessage里处理
+        }
+        else if (message.type == "Turn")
+        {
+            ProcessTurnResult(message);
+        }
+        else if (message.type == "Skill")
+        {
+            ProcessSkillResult(message);
+        }
+        else if (message.type == "DrawCard")
+        {
+            Debug.Log($"对手抽牌：{message.cardsDrawn}张");
+            // 不再立即切换回合，让对手在抽牌后仍可以继续操作
+            UpdateUI();
+        }
+        else if (message.type == "SkipTurn")
+        {
+            Debug.Log($"对手跳过回合(玩家{message.playerIndex + 1})");
+            // 对手跳过回合，设置为我方回合
+            gameState.SetCurrentTurn(playerIndex);
+            hasDrawnCard = false;
+            UpdateUI();
+        }
+        else if (message.type == "FreezeStatus")
+        {
+            // 更新冻结状态同步
+            if (message.playerIndex != playerIndex)
+            {
+                isFrozen = message.isFrozen;
+                Debug.Log($"收到冻结状态更新，对手的冻结状态：{message.isFrozen}");
+            }
+        }
+        else if (message.type == "GameOver")
+        {
+            // 处理游戏结束消息
+            gameEnded = true;
+            string winnerText = $"玩家{message.playerIndex + 1}获胜！达到目标数{targetNumber}";
+            ShowResult(winnerText);
+        }
+
+        isProcessingTurn = false;
+        Debug.Log($"处理完毕，当前回合玩家索引：{gameState.CurrentPlayerTurn}, 我的索引：{playerIndex}");
+    }
+
+    public int GetTargetNumber()
+    {
+        return targetNumber;
+    }
+
+    private void EndGame()
+    {
+        gameEnded = true;
+        string winnerText = $"玩家{playerIndex + 1}获胜！达到目标数{targetNumber}";
+        ShowResult(winnerText);
+
+        // 发送游戏结束消息
+        NetworkMessage gameOverMsg = new NetworkMessage
+        {
+            type = "GameOver",
+            playerIndex = playerIndex,
+            result = gameState.GetScore(playerIndex),
+            playerScores = new int[] { gameState.GetScore(0), gameState.GetScore(1) }
         };
 
         if (playerIndex == 0)
         {
-            TcpHost.Instance.SendTurnData(turnData);
+            TcpHost.Instance.SendTurnData(gameOverMsg);
         }
         else
         {
-            TcpClientConnection.Instance.SendTurnData(turnData);
+            TcpClientConnection.Instance.SendTurnData(gameOverMsg);
         }
-
-        // 处理本地回合结果
-        ProcessTurnResult(turnData);
     }
 
     private void ProcessTurnResult(NetworkMessage turnData)
@@ -593,285 +874,44 @@ public class TurnManager : MonoBehaviour
 
         // 记录出牌信息
         string cardInfo;
-        string calculation = "";
-
         if (turnData.playerIndex == playerIndex)
         {
             cardInfo = "我出牌: ";
-            foreach (var card in turnData.playedCards)
-            {
-                cardInfo += $"[{card.GetDisplayText()}] ";
-            }
-            
-            // 记录领域效果
-            if (turnData.currentField == GameField.Square)
-            {
-                calculation = $"领域效果(平方): {turnData.playedCards[0].numberValue} -> {turnData.playedCards[0].numberValue * turnData.playedCards[0].numberValue}\n";
-            }
-            else if (turnData.currentField == GameField.SquareRoot)
-            {
-                calculation = $"领域效果(根号): {turnData.playedCards[0].numberValue} -> {(int)Mathf.Sqrt(turnData.playedCards[0].numberValue)}\n";
-            }
-            
-            // 记录计算过程
-            if (turnData.playedCards.Count > 0)
-            {
-                int baseScore = gameState.GetScore(turnData.playerIndex); // 使用当前玩家的基础分数
-                if (turnData.playedCards[0].type == CardType.Operator && 
-                    (turnData.playedCards[0].operatorType == OperatorType.Square || 
-                     turnData.playedCards[0].operatorType == OperatorType.SquareRoot))
-                {
-                    calculation += $"计算过程: {baseScore} {turnData.playedCards[0].GetOperatorSymbol()} = {turnData.result}";
-                }
-                else
-                {
-                    calculation += $"计算过程: {baseScore} {turnData.playedCards[0].GetOperatorSymbol()} {turnData.playedCards[0].numberValue} = {turnData.result}";
-                }
-            }
         }
         else
         {
-            cardInfo = $"对手出牌: ";
-            foreach (var card in turnData.playedCards)
-            {
-                cardInfo += $"[{card.GetDisplayText()}] ";
-            }
-            
-            // 记录领域效果
-            if (turnData.currentField == GameField.Square)
-            {
-                calculation = $"领域效果(平方): {turnData.playedCards[0].numberValue} -> {turnData.playedCards[0].numberValue * turnData.playedCards[0].numberValue}\n";
-            }
-            else if (turnData.currentField == GameField.SquareRoot)
-            {
-                calculation = $"领域效果(根号): {turnData.playedCards[0].numberValue} -> {(int)Mathf.Sqrt(turnData.playedCards[0].numberValue)}\n";
-            }
-            
-            // 记录计算过程
-            if (turnData.playedCards.Count > 0)
-            {
-                int baseScore = gameState.GetScore(turnData.playerIndex); // 使用对手的基础分数
-                if (turnData.playedCards[0].type == CardType.Operator && 
-                    (turnData.playedCards[0].operatorType == OperatorType.Square || 
-                     turnData.playedCards[0].operatorType == OperatorType.SquareRoot))
-                {
-                    calculation += $"计算过程: {baseScore} {turnData.playedCards[0].GetOperatorSymbol()} = {turnData.result}";
-                }
-                else
-                {
-                    calculation += $"计算过程: {baseScore} {turnData.playedCards[0].GetOperatorSymbol()} {turnData.playedCards[0].numberValue} = {turnData.result}";
-                }
-            }
+            cardInfo = "对手出牌: ";
+        }
+        
+        foreach (var card in turnData.playedCards)
+        {
+            cardInfo += $"[{card.GetDisplayText()}] ";
+        }
+        Debug.Log(cardInfo);
+        
+        // 记录领域效果
+        if (turnData.currentField != GameField.Normal)
+        {
+            string fieldEffect = turnData.currentField == GameField.Square ? "平方领域" : "根号领域";
+            Debug.Log($"当前领域: {fieldEffect}");
         }
 
-        Debug.Log(cardInfo);
-        Debug.Log(calculation);
-
         // 检查胜利条件
-        if (turnData.result == targetNumber)
+        if (turnData.result >= targetNumber)
         {
-            gameEnded = true;
-            string winnerText = $"玩家{turnData.playerIndex + 1}获胜！达到目标数{targetNumber}";
-            ShowResult(winnerText);
+            Debug.Log($"玩家{turnData.playerIndex + 1}获胜！得分：{turnData.result}");
+            EndGame();
+            return;
+        }
 
-            // 发送游戏结束消息
-            NetworkMessage gameOverMsg = new NetworkMessage
-            {
-                type = "GameOver",
-                playerIndex = turnData.playerIndex,
-                result = turnData.result,
-                playerScores = new int[] { gameState.GetScore(0), gameState.GetScore(1) }
-            };
-
-            if (playerIndex == 0)
-            {
-                TcpHost.Instance.SendTurnData(gameOverMsg);
-            }
-            else
-            {
-                TcpClientConnection.Instance.SendTurnData(gameOverMsg);
-            }
+        // 如果是对手的出牌回合，那么切换到我方回合
+        if (turnData.playerIndex != playerIndex)
+        {
+            gameState.SetCurrentTurn(playerIndex);
+            hasDrawnCard = false; // 重置抽牌状态，准备新回合
         }
 
         // 更新UI
         UpdateUI();
-
-        // 重置选择状态
-        selectedNumberCard = null;
-        selectedOperatorCard = null;
-        selectedSkillCard = null;
-        handManager.DeselectCard();
-
-        // 重置抽牌状态
-        hasDrawnCard = false;
-
-        // 如果不是冻结卡，切换回合
-        if (turnData.playedCards.Count > 0 && 
-            !(turnData.playedCards[0].type == CardType.Skill && 
-              turnData.playedCards[0].skillType == SkillType.Freeze))
-        {
-            gameState.NextTurn();
-        }
-
-        isProcessingTurn = false;
-    }
-
-    private void DrawNewCards()
-    {
-        // 抽两张新牌
-        for (int i = 0; i < 2; i++)
-        {
-            Card newCard = CardDeckManager.Instance.DrawCard();
-            if (newCard != null)
-            {
-                handManager.AddCard(newCard);
-            }
-        }
-    }
-
-    private void UpdateUI()
-    {
-        string status = isFrozen ? " (已冻结)" : "";
-        string fieldStatus = "";
-        GameField currentField = CardDeckManager.Instance.GetCurrentField();
-        switch (currentField)
-        {
-            case GameField.Square:
-                fieldStatus = " (平方领域)";
-                break;
-            case GameField.SquareRoot:
-                fieldStatus = " (根号领域)";
-                break;
-        }
-        
-        // 修改回合文本显示逻辑
-        if (gameState.IsPlayerTurn(playerIndex))
-        {
-            turnText.text = $"你的回合{status}{fieldStatus}";
-        }
-        else
-        {
-            turnText.text = $"对手回合{status}{fieldStatus}";
-        }
-        
-        // 更新分数显示
-        player1ScoreText.text = $"{gameState.GetScore(playerIndex)}";
-        player2ScoreText.text = $"{gameState.GetScore((playerIndex + 1) % 2)}";
-        
-        targetNumberText.text = $"{targetNumber}";
-        if (CardDeckManager.Instance.GetCurrentRound() > 0)
-        {
-            targetNumberText.text += $"\n回合: {CardDeckManager.Instance.GetCurrentRound()}/10";
-        }
-
-        UpdatePlayCardButtonState();
-    }
-
-    private void ShowResult(string text)
-    {
-        resultText.text = text;
-        resultTextObject.SetActive(true);
-        StartCoroutine(HideResultAfterDelay());
-    }
-
-    private IEnumerator HideResultAfterDelay()
-    {
-        yield return new WaitForSeconds(resultDisplayTime);
-        resultTextObject.SetActive(false);
-    }
-
-    public void OnOpponentTurn(NetworkMessage message)
-    {
-        if (message.type == "GameOver")
-        {
-            gameEnded = true;
-            string winnerText = $"玩家{message.playerIndex + 1}获胜！达到目标数{targetNumber}";
-            ShowResult(winnerText);
-            return;
-        }
-
-        if (message.type == "Skill")
-        {
-            ProcessSkillResult(message);
-        }
-        else if (message.type == "TargetNumber")
-        {
-            Debug.Log($"收到目标数: {message.targetNumber}, 玩家: {playerIndex}");
-            SetTargetNumber(message.targetNumber);
-        }
-        else if (message.type == "RequestTargetNumber")
-        {
-            // 主机收到请求后发送目标数
-            if (playerIndex == 0)
-            {
-                Debug.Log($"收到目标数请求，发送目标数: {targetNumber}");
-                NetworkMessage targetMsg = new NetworkMessage
-                {
-                    type = "TargetNumber",
-                    targetNumber = targetNumber,
-                    playerIndex = playerIndex
-                };
-                TcpHost.Instance.SendTurnData(targetMsg);
-            }
-        }
-        else if (message.type == "SkipTurn")
-        {
-            // 处理跳过回合消息
-            Debug.Log($"玩家{message.playerIndex + 1}跳过回合");
-            gameState.NextTurn();
-            UpdateUI();
-        }
-        else
-        {
-            ProcessTurnResult(message);
-        }
-    }
-
-    public int GetTargetNumber()
-    {
-        return targetNumber;
-    }
-
-    private void EndGame()
-    {
-        gameEnded = true;
-        int player1Score = gameState.GetScore(0);
-        int player2Score = gameState.GetScore(1);
-        int player1Diff = Mathf.Abs(targetNumber - player1Score);
-        int player2Diff = Mathf.Abs(targetNumber - player2Score);
-
-        string winnerText;
-        if (player1Diff < player2Diff)
-        {
-            winnerText = $"玩家1获胜！\n玩家1: {player1Score} (差值: {player1Diff})\n玩家2: {player2Score} (差值: {player2Diff})";
-        }
-        else if (player2Diff < player1Diff)
-        {
-            winnerText = $"玩家2获胜！\n玩家1: {player1Score} (差值: {player1Diff})\n玩家2: {player2Score} (差值: {player2Diff})";
-        }
-        else
-        {
-            winnerText = $"平局！\n玩家1: {player1Score} (差值: {player1Diff})\n玩家2: {player2Score} (差值: {player2Diff})";
-        }
-
-        ShowResult(winnerText);
-
-        // 发送游戏结束消息
-        NetworkMessage gameOverMsg = new NetworkMessage
-        {
-            type = "GameOver",
-            playerIndex = player1Diff < player2Diff ? 0 : (player2Diff < player1Diff ? 1 : -1),
-            result = currentNumber,
-            playerScores = new int[] { player1Score, player2Score }
-        };
-
-        if (playerIndex == 0)
-        {
-            TcpHost.Instance.SendTurnData(gameOverMsg);
-        }
-        else
-        {
-            TcpClientConnection.Instance.SendTurnData(gameOverMsg);
-        }
     }
 }
