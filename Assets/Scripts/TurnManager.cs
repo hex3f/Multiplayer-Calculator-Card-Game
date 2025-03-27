@@ -544,6 +544,8 @@ public class TurnManager : MonoBehaviour
             if (selectedSkillCard != null)
             {
                 handManager.RemoveCard(selectedSkillCard);
+                // 将技能卡添加到历史牌区域显示
+                playedCardsManager.AddCard(selectedSkillCard, true);
                 selectedSkillCard = null;
             }
 
@@ -570,6 +572,12 @@ public class TurnManager : MonoBehaviour
         }
         else
         {
+            // 如果是对手使用的技能牌，添加到对手的历史牌区域
+            if (skillCard != null)
+            {
+                playedCardsManager.AddCard(skillCard, false);
+            }
+            
             // 如果是对手使用技能牌，不影响当前回合
             // 对手回合继续进行，不用做任何处理
             Debug.Log("对手使用技能牌，等待对手行动");
@@ -688,7 +696,19 @@ public class TurnManager : MonoBehaviour
         selectedSkillCard = null;
         handManager.DeselectCard();
         hasDrawnCard = false;
-
+        
+        // 先更新UI显示分数
+        UpdateUI();
+        
+        // 延迟检查胜利条件，给玩家时间看到分数变化
+        StartCoroutine(DelayedVictoryCheck(result));
+    }
+    
+    private IEnumerator DelayedVictoryCheck(int result)
+    {
+        // 延迟0.5秒让玩家看到分数变化
+        yield return new WaitForSeconds(0.5f);
+        
         // 检查胜利条件
         if (result >= targetNumber)
         {
@@ -713,10 +733,11 @@ public class TurnManager : MonoBehaviour
             }
             
             EndGame();
-            return;
+            yield break;
         }
 
         // 设置下一个玩家的回合
+        int nextPlayerIndex = (playerIndex + 1) % gameState.PlayerCount;
         gameState.SetCurrentTurn(nextPlayerIndex);
         Debug.Log($"回合结束，切换到玩家{nextPlayerIndex + 1}的回合");
         
@@ -920,14 +941,8 @@ public class TurnManager : MonoBehaviour
             string winnerText = $"玩家{message.playerIndex + 1}获胜！达到目标数{targetNumber}";
             ShowResult(winnerText);
             
-            // 设置结果面板显示失败信息
-            if (gameResultPanel != null && gameResultText != null)
-            {
-                gameResultText.text = $"你输了！\n你的分数: {gameState.GetScore(playerIndex)}\n对手分数: {message.result}\n目标数: {targetNumber}";
-                
-                // 在短暂延迟后显示结果面板
-                StartCoroutine(ShowGameResultPanelDelayed(1.5f));
-            }
+            // 使用相同的延迟逻辑显示失败结果
+            StartCoroutine(DelayedShowDefeatPanel(message.result));
             
             // 禁用游戏按钮
             DisableGameButtons();
@@ -940,6 +955,18 @@ public class TurnManager : MonoBehaviour
         UpdatePlayCardButtonState();
         
         Debug.Log($"处理完毕，当前回合玩家索引：{gameState.CurrentPlayerTurn}, 我的索引：{playerIndex}, 是否是我的回合：{gameState.IsPlayerTurn(playerIndex)}, 冻结状态：{isFrozen}");
+    }
+    
+    private IEnumerator DelayedShowDefeatPanel(int opponentScore)
+    {
+        // 延迟1.5秒，让玩家先看到分数和失败提示
+        yield return new WaitForSeconds(1.5f);
+        
+        if (gameResultPanel != null && gameResultText != null)
+        {
+            gameResultText.text = $"你输了！\n你的分数: {gameState.GetScore(playerIndex)}\n对手分数: {opponentScore}\n目标数: {targetNumber}";
+            gameResultPanel.SetActive(true);
+        }
     }
 
     public int GetTargetNumber()
@@ -954,15 +981,6 @@ public class TurnManager : MonoBehaviour
         // 显示结果文本
         string winnerText = $"玩家{playerIndex + 1}获胜！达到目标数{targetNumber}";
         ShowResult(winnerText);
-        
-        // 设置结果面板显示胜利信息
-        if (gameResultPanel != null && gameResultText != null)
-        {
-            gameResultText.text = $"你赢了！\n最终分数: {gameState.GetScore(playerIndex)}\n目标数: {targetNumber}";
-            
-            // 在短暂延迟后显示结果面板
-            StartCoroutine(ShowGameResultPanelDelayed(1.5f));
-        }
         
         // 发送游戏结束消息
         NetworkMessage gameOverMsg = new NetworkMessage
@@ -982,14 +1000,23 @@ public class TurnManager : MonoBehaviour
             TcpClientConnection.Instance.SendTurnData(gameOverMsg);
         }
         
+        // 设置结果面板显示胜利信息，但稍微延迟显示
+        StartCoroutine(DelayedShowVictoryPanel());
+        
         // 禁用游戏按钮
         DisableGameButtons();
     }
     
-    private IEnumerator ShowGameResultPanelDelayed(float delay)
+    private IEnumerator DelayedShowVictoryPanel()
     {
-        yield return new WaitForSeconds(delay);
-        gameResultPanel.SetActive(true);
+        // 延迟1.5秒，让玩家先看到分数和胜利提示
+        yield return new WaitForSeconds(1.5f);
+        
+        if (gameResultPanel != null && gameResultText != null)
+        {
+            gameResultText.text = $"你赢了！\n最终分数: {gameState.GetScore(playerIndex)}\n目标数: {targetNumber}";
+            gameResultPanel.SetActive(true);
+        }
     }
     
     private void DisableGameButtons()
@@ -1047,7 +1074,26 @@ public class TurnManager : MonoBehaviour
             string fieldEffect = turnData.currentField == GameField.Square ? "平方领域" : "根号领域";
             Debug.Log($"当前领域: {fieldEffect}");
         }
+        
+        // 如果是对手的出牌回合，那么切换到我方回合
+        if (turnData.playerIndex != playerIndex)
+        {
+            gameState.SetCurrentTurn(playerIndex);
+            hasDrawnCard = false; // 重置抽牌状态，准备新回合
+        }
 
+        // 先更新UI，让玩家看到分数变化
+        UpdateUI();
+        
+        // 延迟检查胜利条件
+        StartCoroutine(DelayedVictoryCheckForOpponent(turnData));
+    }
+    
+    private IEnumerator DelayedVictoryCheckForOpponent(NetworkMessage turnData)
+    {
+        // 延迟0.5秒让玩家看到分数变化
+        yield return new WaitForSeconds(0.5f);
+        
         // 检查胜利条件
         if (turnData.result >= targetNumber)
         {
@@ -1068,18 +1114,10 @@ public class TurnManager : MonoBehaviour
                 // 禁用游戏按钮
                 DisableGameButtons();
             }
-            return;
+            yield break;
         }
-
-        // 如果是对手的出牌回合，那么切换到我方回合
-        if (turnData.playerIndex != playerIndex)
-        {
-            gameState.SetCurrentTurn(playerIndex);
-            hasDrawnCard = false; // 重置抽牌状态，准备新回合
-        }
-
-        // 更新UI
-        UpdateUI();
+        
+        isProcessingTurn = false;
     }
 
     // 强制设置当前回合（仅用于调试/修复冻结问题）

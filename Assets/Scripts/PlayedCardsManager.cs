@@ -46,6 +46,16 @@ public class PlayedCardsManager : MonoBehaviour
         RectTransform targetContainer = GetTargetContainer(card, isPlayer);
         if (targetContainer == null) return;
 
+        // 检查当前容器中的卡牌数量，如果超过4张，删除最早的
+        if (containerCards[targetContainer].Count >= 4)
+        {
+            // 删除最早添加的卡牌（列表中的第一个）
+            GameObject oldestCard = containerCards[targetContainer][0];
+            containerCards[targetContainer].RemoveAt(0);
+            Destroy(oldestCard);
+            Debug.Log($"移除最早的卡牌，保持{(isPlayer ? "玩家" : "对手")}的{card.type}类型卡牌不超过4张");
+        }
+
         GameObject cardObj = Instantiate(cardPrefab, targetContainer);
         cardObj.transform.localScale = Vector3.one * cardScale;  // 设置卡牌缩放
 

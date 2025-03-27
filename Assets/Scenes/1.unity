@@ -1880,7 +1880,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   MinNumber: 10
-  MaxNumber: 50
+  MaxNumber: 20
 --- !u!114 &682637605
 MonoBehaviour:
   m_ObjectHideFlags: 0
