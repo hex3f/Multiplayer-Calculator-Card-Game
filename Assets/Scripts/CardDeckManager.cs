@@ -10,6 +10,8 @@ public class CardDeckManager : MonoBehaviour
     private int currentRound = 0;
     private const int MAX_ROUNDS = 10;
     private GameField currentField = GameField.Normal;
+    public int MinNumber;
+    public int MaxNumber;
 
     private void Awake()
     {
@@ -152,7 +154,7 @@ public class CardDeckManager : MonoBehaviour
 
     public int GenerateTargetNumber()
     {
-        return Random.Range(1, 100);
+        return Random.Range(MinNumber, MaxNumber);
     }
 
     public void NextRound()
