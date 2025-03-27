@@ -6,53 +6,80 @@ using UnityEngine.UI;
 public class HandManager : MonoBehaviour
 {
     public GameObject cardPrefab;
-    public Transform handContainer;
-    public float cardSpacing = 100f;
-    public float cardScale = 1f;
+    public RectTransform handContainer;
+    public float cardScale = 1.0f;
     public float selectedCardScale = 1.2f;
-    public float cardMoveSpeed = 10f;
-    public float selectedCardOffset = 50f;
+    public float selectedCardOffset = 30f;
+    public float animationDuration = 0.3f;
 
     private List<Card> hand = new List<Card>();
     private List<GameObject> cardObjects = new List<GameObject>();
     private System.Action<Card> cardClickCallback;
     private HashSet<Card> selectedCards = new HashSet<Card>();
     private bool isUpdatingPositions = false;
+    private Coroutine currentAnimation;
+    public GridLayoutGroup gridLayout;
+    public Vector2 cellSize;
+    public Vector2 spacing;
+    public RectOffset padding;
+
+    private void Awake()
+    {
+        // 在Awake中初始化值
+        cellSize = new Vector2(150f, 200f);
+        spacing = new Vector2(-30f, 0f);
+        padding = new RectOffset(50, 50, 10, 10);
+
+        // 设置手牌容器的锚点和位置
+        if (handContainer != null)
+        {
+            handContainer.anchorMin = new Vector2(0, 0.5f);
+            handContainer.anchorMax = new Vector2(0, 0.5f);
+            handContainer.pivot = new Vector2(0, 0.5f);
+            handContainer.anchoredPosition = new Vector2(50f, 0f);
+
+            // 设置 GridLayoutGroup
+            GridLayoutGroup layoutGroup = handContainer.GetComponent<GridLayoutGroup>();
+            if (layoutGroup != null)
+            {
+                layoutGroup.childAlignment = TextAnchor.MiddleLeft;  // 设置为左对齐
+                layoutGroup.padding = padding;
+                layoutGroup.spacing = spacing;
+                layoutGroup.cellSize = cellSize;
+                layoutGroup.enabled = false;  // 禁用 GridLayoutGroup，使用我们自己的布局
+            }
+        }
+    }
 
     public void ShowHand(List<Card> cards, System.Action<Card> onCardClick)
     {
-        // 清空现有手牌
         ClearHand();
-
-        // 保存回调
         cardClickCallback = onCardClick;
-
-        // 添加新卡牌
         foreach (var card in cards)
         {
             AddCard(card);
         }
-
-        // 更新卡牌位置
         UpdateCardPositions();
     }
 
     public void AddCard(Card card)
     {
-        // 先复位所有卡牌
-        foreach (var cardObj in cardObjects)
-        {
-            Vector3 pos = cardObj.transform.localPosition;
-            cardObj.transform.localPosition = new Vector3(pos.x, 0, pos.z);
-        }
-
         hand.Add(card);
         GameObject cardObjNew = Instantiate(cardPrefab, handContainer);
         cardObjects.Add(cardObjNew);
 
-        cardObjNew.GetComponent<CardUI>().SetCard(card, OnCardClicked);
+        cardObjNew.transform.localScale = Vector3.one * cardScale;
 
-        // 更新卡牌位置
+        RectTransform rectTransform = cardObjNew.GetComponent<RectTransform>();
+        if (rectTransform != null)
+        {
+            rectTransform.anchorMin = new Vector2(0, 0);
+            rectTransform.anchorMax = new Vector2(0, 0);
+            rectTransform.pivot = new Vector2(0, 0.5f);
+            rectTransform.sizeDelta = cellSize;
+        }
+
+        cardObjNew.GetComponent<CardUI>().SetCard(card, OnCardClicked);
         UpdateCardPositions();
     }
 
@@ -62,56 +89,36 @@ public class HandManager : MonoBehaviour
         if (index != -1)
         {
             hand.RemoveAt(index);
-            Destroy(cardObjects[index]);
+            GameObject cardObj = cardObjects[index];
             cardObjects.RemoveAt(index);
+            Destroy(cardObj);
             UpdateCardPositions();
         }
     }
 
     public void SelectCard(Card card)
     {
-        // 如果卡牌已经被选中，不做任何改变
         if (selectedCards.Contains(card))
         {
             return;
         }
 
-        // 选择新卡牌
         selectedCards.Add(card);
-        int index = hand.IndexOf(card);
-        if (index != -1)
-        {
-            // 将卡牌向前移动
-            Vector3 currentPos = cardObjects[index].transform.localPosition;
-            cardObjects[index].transform.localPosition = new Vector3(currentPos.x, currentPos.y + selectedCardOffset, currentPos.z);
-        }
+        UpdateCardPositions();
     }
 
     public void DeselectCard()
     {
-        // 取消所有选中卡牌的选择
-        foreach (var cardObj in cardObjects)
-        {
-            Vector3 pos = cardObj.transform.localPosition;
-            cardObj.transform.localPosition = new Vector3(pos.x, 0, pos.z);
-        }
         selectedCards.Clear();
         UpdateCardPositions();
     }
 
     public void DeselectCard(Card card)
     {
-        // 取消指定卡牌的选择
         if (selectedCards.Remove(card))
         {
-            int index = hand.IndexOf(card);
-            if (index != -1)
-            {
-                Vector3 pos = cardObjects[index].transform.localPosition;
-                cardObjects[index].transform.localPosition = new Vector3(pos.x, 0, pos.z);
-            }
+            UpdateCardPositions();
         }
-        UpdateCardPositions();
     }
 
     private void OnCardClicked(Card card)
@@ -124,15 +131,64 @@ public class HandManager : MonoBehaviour
         if (isUpdatingPositions) return;
         isUpdatingPositions = true;
 
-        float startX = -(hand.Count - 1) * cardSpacing / 2;
-        for (int i = 0; i < cardObjects.Count; i++)
+        if (currentAnimation != null)
         {
-            float targetY = selectedCards.Contains(hand[i]) ? selectedCardOffset : 0;
-            Vector3 targetPosition = new Vector3(startX + i * cardSpacing, targetY, 0);
-            cardObjects[i].transform.localPosition = targetPosition;
+            StopCoroutine(currentAnimation);
         }
 
+        List<Vector3> targetPositions = new List<Vector3>();
+        List<float> targetScales = new List<float>();
+
+        float startX = 0f;
+
+        for (int i = 0; i < cardObjects.Count; i++)
+        {
+            float targetScale = selectedCards.Contains(hand[i]) ? selectedCardScale : cardScale;
+            float targetY = selectedCards.Contains(hand[i]) ? selectedCardOffset : 0;
+
+            float posX = startX + (cellSize.x + spacing.x) * i;
+            targetPositions.Add(new Vector3(posX, targetY, 0));
+            targetScales.Add(targetScale);
+        }
+
+        currentAnimation = StartCoroutine(AnimateAllCards(targetPositions, targetScales));
         isUpdatingPositions = false;
+    }
+
+    private IEnumerator AnimateAllCards(List<Vector3> targetPositions, List<float> targetScales)
+    {
+        List<Vector3> startPositions = new List<Vector3>();
+        List<Vector3> startScales = new List<Vector3>();
+        foreach (var cardObj in cardObjects)
+        {
+            startPositions.Add(cardObj.transform.localPosition);
+            startScales.Add(cardObj.transform.localScale);
+        }
+
+        float elapsedTime = 0;
+
+        while (elapsedTime < animationDuration)
+        {
+            elapsedTime += Time.deltaTime;
+            float t = elapsedTime / animationDuration;
+            float smoothT = Mathf.SmoothStep(0, 1, t);
+
+            for (int i = 0; i < cardObjects.Count; i++)
+            {
+                cardObjects[i].transform.localPosition = Vector3.Lerp(startPositions[i], targetPositions[i], smoothT);
+                cardObjects[i].transform.localScale = Vector3.Lerp(startScales[i], Vector3.one * targetScales[i], smoothT);
+            }
+
+            yield return null;
+        }
+
+        for (int i = 0; i < cardObjects.Count; i++)
+        {
+            cardObjects[i].transform.localPosition = targetPositions[i];
+            cardObjects[i].transform.localScale = Vector3.one * targetScales[i];
+        }
+
+        currentAnimation = null;
     }
 
     public List<Card> GetHand()
@@ -147,6 +203,12 @@ public class HandManager : MonoBehaviour
 
     private void ClearHand()
     {
+        if (currentAnimation != null)
+        {
+            StopCoroutine(currentAnimation);
+            currentAnimation = null;
+        }
+
         foreach (var cardObj in cardObjects)
         {
             Destroy(cardObj);

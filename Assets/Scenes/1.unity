@@ -1535,11 +1535,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cardPrefab: {fileID: 1651109703780908456, guid: cee96b63c10629a409bfc7c2c430a19c, type: 3}
   handContainer: {fileID: 0}
-  cardSpacing: 100
   cardScale: 1
   selectedCardScale: 1.2
-  cardMoveSpeed: 10
   selectedCardOffset: 50
+  animationDuration: 0.3
+  gridLayout: {fileID: 0}
+  cellSize: {x: 0, y: 0}
+  spacing: {x: 0, y: 0}
+  padding:
+    m_Left: 0
+    m_Right: 0
+    m_Top: 0
+    m_Bottom: 0
 --- !u!1 &734920268
 GameObject:
   m_ObjectHideFlags: 0
@@ -1926,9 +1933,9 @@ GameObject:
   - component: {fileID: 928163151}
   - component: {fileID: 928163154}
   - component: {fileID: 928163153}
-  - component: {fileID: 928163152}
+  - component: {fileID: 928163155}
   m_Layer: 5
-  m_Name: Card
+  m_Name: HandCard
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1948,37 +1955,11 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1924399495}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0.5}
-  m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 276.975, y: 0}
-  m_SizeDelta: {x: 553.9501, y: 120}
-  m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &928163152
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 928163150}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 30649d3a9faa99c48a7b1166b86bf2a0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_Padding:
-    m_Left: 10
-    m_Right: 10
-    m_Top: 10
-    m_Bottom: 10
-  m_ChildAlignment: 3
-  m_Spacing: 10
-  m_ChildForceExpandWidth: 0
-  m_ChildForceExpandHeight: 1
-  m_ChildControlWidth: 0
-  m_ChildControlHeight: 0
-  m_ChildScaleWidth: 0
-  m_ChildScaleHeight: 0
-  m_ReverseArrangement: 0
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: -322, y: 0}
+  m_SizeDelta: {x: 500, y: 120}
+  m_Pivot: {x: 0, y: 0.5}
 --- !u!114 &928163153
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2017,6 +1998,30 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 928163150}
   m_CullTransparentMesh: 1
+--- !u!114 &928163155
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 928163150}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a8695521f0d02e499659fee002a26c2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Padding:
+    m_Left: 10
+    m_Right: 10
+    m_Top: 10
+    m_Bottom: 10
+  m_ChildAlignment: 3
+  m_StartCorner: 0
+  m_StartAxis: 0
+  m_CellSize: {x: 80, y: 100}
+  m_Spacing: {x: 10, y: 10}
+  m_Constraint: 0
+  m_ConstraintCount: 2
 --- !u!1 &963816172
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 public class ConnectUI : MonoBehaviour
 {
@@ -23,7 +24,7 @@ public class ConnectUI : MonoBehaviour
     public Button playCardButton;
     public HandManager handManager;
     public GameObject cardPrefab;
-    public Transform handContainer;
+    public RectTransform handContainer;
 
     private void Awake()
     {
@@ -65,6 +66,14 @@ public class ConnectUI : MonoBehaviour
 
             handManager.cardPrefab = cardPrefab;
             handManager.handContainer = handContainer;
+            handManager.gridLayout = handContainer.GetComponent<GridLayoutGroup>();
+            // 保存Grid Layout Group的设置
+            handManager.cellSize = handManager.gridLayout.cellSize;
+            handManager.spacing = handManager.gridLayout.spacing;
+            handManager.padding = handManager.gridLayout.padding;
+
+            // 禁用Grid Layout Group
+            handManager.gridLayout.enabled = false;
         }
 
         // 初始化回合管理器
