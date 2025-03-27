@@ -152,8 +152,9 @@ public class ConnectUI : MonoBehaviour
             playCardButton: playCardButton
         );
         
-        // 隐藏连接面板，显示游戏面板
+        // 隐藏连接面板和等待文本，显示游戏面板
         connectPanel.SetActive(false);
+        waitingText.gameObject.SetActive(false);
         gamePanel.SetActive(true);
     }
 }

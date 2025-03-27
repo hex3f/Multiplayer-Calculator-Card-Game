@@ -695,16 +695,8 @@ public class TurnManager : MonoBehaviour
         turnText.text = $"当前回合: 玩家{gameState.CurrentPlayerTurn + 1}{status}{fieldStatus}";
         
         // 更新分数显示
-        if (playerIndex == 0)
-        {
-            player1ScoreText.text = $"1分: {gameState.GetScore(0)}";
-            player2ScoreText.text = $"2分: {gameState.GetScore(1)}";
-        }
-        else
-        {
-            player1ScoreText.text = $"2分: {gameState.GetScore(1)}";
-            player2ScoreText.text = $"1分: {gameState.GetScore(0)}";
-        }
+        player1ScoreText.text = $"{gameState.GetScore(playerIndex)}";
+        player2ScoreText.text = $"{gameState.GetScore((playerIndex + 1) % 2)}";
         
         targetNumberText.text = $"{targetNumber}";
         if (CardDeckManager.Instance.GetCurrentRound() > 0)
