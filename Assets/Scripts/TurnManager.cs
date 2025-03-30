@@ -817,6 +817,14 @@ public class TurnManager : MonoBehaviour
         }
     }
 
+    private string FormatTargetNumber(int number)
+    {
+        // 将数字转换为字符串，确保是三位数
+        string numberStr = number.ToString("D3");
+        // 在每个数字之间添加空格
+        return string.Join(" ", numberStr.ToCharArray());
+    }
+
     private void UpdateUI()
     {
         // 更新回合显示
@@ -834,7 +842,7 @@ public class TurnManager : MonoBehaviour
         // 更新目标数字显示
         if (targetNumberText != null)
         {
-            targetNumberText.text = $"{targetNumber}";
+            targetNumberText.text = FormatTargetNumber(targetNumber);
         }
 
         // 更新玩家分数 - player1ScoreText显示当前玩家的分数，player2ScoreText显示对手的分数
