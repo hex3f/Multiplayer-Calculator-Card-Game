@@ -78,18 +78,47 @@ public class TcpHost : MonoBehaviour
 
     private void ReceiveMessages(TcpClient client)
     {
-        byte[] buffer = new byte[1024];
+        byte[] lengthBuffer = new byte[4]; // 用于读取消息长度
+        byte[] messageBuffer = new byte[4096]; // 用于读取消息内容
         NetworkStream stream = client.GetStream();
 
         while (isRunning && client.Connected)
         {
             try
             {
-                int bytesRead = stream.Read(buffer, 0, buffer.Length);
-                if (bytesRead > 0)
+                // 读取消息长度
+                int bytesRead = stream.Read(lengthBuffer, 0, 4);
+                if (bytesRead == 0) continue;
+
+                int messageLength = BitConverter.ToInt32(lengthBuffer, 0);
+                if (messageLength <= 0 || messageLength > 4096)
                 {
-                    string json = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    Debug.LogError($"无效的消息长度: {messageLength}");
+                    continue;
+                }
+
+                // 读取消息内容
+                bytesRead = stream.Read(messageBuffer, 0, messageLength);
+                if (bytesRead == 0) continue;
+
+                string json = Encoding.UTF8.GetString(messageBuffer, 0, bytesRead);
+                
+                try
+                {
+                    // 验证JSON格式
+                    if (string.IsNullOrEmpty(json) || !json.StartsWith("{") || !json.EndsWith("}"))
+                    {
+                        Debug.LogError($"无效的JSON格式: {json}");
+                        continue;
+                    }
+
                     NetworkMessage message = JsonUtility.FromJson<NetworkMessage>(json);
+                    if (message == null)
+                    {
+                        Debug.LogError("消息解析失败");
+                        continue;
+                    }
+
                     Debug.Log($"收到消息: {message.type}, 玩家: {message.playerIndex}");
 
                     // 在主线程中处理消息
@@ -203,6 +232,10 @@ public class TcpHost : MonoBehaviour
                         }
                     });
                 }
+                catch (Exception e)
+                {
+                    Debug.LogError($"处理消息失败: {e.Message}");
+                }
             }
             catch (Exception e)
             {
@@ -230,14 +263,18 @@ public class TcpHost : MonoBehaviour
             Debug.Log($"[主机] 发送卡牌数量 - 数字:{message.numberCardCount} 运算符:{message.operatorCardCount} 特殊运算符:{message.extraOperatorCardCount} 技能:{message.skillCardCount}");
             
             string json = JsonUtility.ToJson(message);
-            byte[] data = Encoding.UTF8.GetBytes(json);
+            byte[] jsonData = Encoding.UTF8.GetBytes(json);
+            byte[] lengthData = BitConverter.GetBytes(jsonData.Length);
             
             foreach (var client in clients)
             {
                 if (client.Connected)
                 {
                     NetworkStream stream = client.GetStream();
-                    stream.Write(data, 0, data.Length);
+                    // 先发送长度
+                    stream.Write(lengthData, 0, lengthData.Length);
+                    // 再发送数据
+                    stream.Write(jsonData, 0, jsonData.Length);
                     Debug.Log($"发送消息: {message.type}, 目标数: {message.targetNumber}");
                 }
             }
