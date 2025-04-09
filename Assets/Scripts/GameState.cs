@@ -74,7 +74,7 @@ public class GameState : MonoBehaviour
         {
             playerScores[playerIndex] = value;
 
-            Debug.Log(value);
+            Debug.Log(playerIndex + ":" + value);
         }
     }
 

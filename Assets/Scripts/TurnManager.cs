@@ -33,7 +33,7 @@ public class TurnManager : MonoBehaviour
     private Card selectedOperatorCard;
     private Card selectedExtraOperatorCard;
     private Card selectedSkillCard;
-    private GameState gameState;
+    public GameState gameState;
     public int playerIndex;
     private bool isProcessingTurn;
     private bool isPlayCard;
@@ -42,6 +42,7 @@ public class TurnManager : MonoBehaviour
     private int currentNumber; // 当前累计数值
     private bool gameEnded = false;
     public bool isFrozen = false; // 添加冻结状态变量
+    public bool isMirror = false;
 
     private void Awake() => Instance = this;
 
@@ -731,7 +732,7 @@ public class TurnManager : MonoBehaviour
                         Debug.Log($"[客户端] 玩家2发送分数同步消息给玩家1：玩家1 {gameState.GetScore(0)}, 玩家2 {gameState.GetScore(1)}");
                     }
                 }
-                break;
+            break;
         }
 
         // 如果是自己使用的技能牌
@@ -1319,7 +1320,14 @@ public class TurnManager : MonoBehaviour
         lastTurnData = turnData;
 
         // 更新当前玩家的分数
-        gameState.AddScore(turnData.playerIndex, turnData.result);
+        if (!isMirror)
+        {
+            gameState.AddScore(turnData.playerIndex, turnData.result);
+        }
+        else
+        {
+            isMirror = false;
+        }
 
         // 记录出牌信息
         string cardInfo;
