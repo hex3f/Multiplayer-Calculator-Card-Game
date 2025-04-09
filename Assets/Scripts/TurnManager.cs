@@ -838,17 +838,17 @@ public class TurnManager : MonoBehaviour
         }
 
         // 4. 最后添加技能牌
-        if (selectedSkillCard != null)
-        {
-            Debug.Log($"添加技能牌: {selectedSkillCard.GetDisplayText()}");
-            playedCards.Add(selectedSkillCard);
-            handManager.RemoveCard(selectedSkillCard);
-            playedCardsManager.AddCard(selectedSkillCard, true);
-        }
-        else
-        {
-            Debug.Log("selectedSkillCard为null，无法添加技能牌");
-        }
+        //if (selectedSkillCard != null)
+        //{
+        //    Debug.Log($"添加技能牌: {selectedSkillCard.GetDisplayText()}");
+        //    playedCards.Add(selectedSkillCard);
+        //    handManager.RemoveCard(selectedSkillCard);
+        //    playedCardsManager.AddCard(selectedSkillCard, true);
+        //}
+        //else
+        //{
+        //    Debug.Log("selectedSkillCard为null，无法添加技能牌");
+        //}
 
         // 处理不同类型的运算符
         int result = CalculateResult(playedCards);
@@ -859,44 +859,50 @@ public class TurnManager : MonoBehaviour
         int oldScore = gameState.GetScore(playerIndex);
 
         // 如果是镜像技能，先不更新分数，而是直接交换
-        if (selectedSkillCard != null && selectedSkillCard.skillType == SkillType.Mirror)
+        //if (selectedSkillCard != null && selectedSkillCard.skillType == SkillType.Mirror)
+        //{
+        //    // 获取当前双方分数
+        //    int myScore = gameState.GetScore(playerIndex);
+        //    int opponentScore = gameState.GetScore((playerIndex + 1) % 2);
+
+        //    Debug.Log($"镜像前 - 我方:{myScore}, 对方:{opponentScore}");
+
+        //    // 先计算新的分数
+        //    int myNewScore = result;
+
+        //    // 交换分数
+        //    gameState.AddScore(playerIndex, opponentScore);
+        //    gameState.AddScore((playerIndex + 1) % 2, myNewScore);
+
+        //    Debug.Log($"镜像后 - 玩家1: {gameState.GetScore(0)}, 玩家2: {gameState.GetScore(1)}");
+
+        //    // 发送分数同步消息
+        //    NetworkMessage scoreSyncMsg = new NetworkMessage
+        //    {
+        //        type = "ScoreSync",
+        //        playerIndex = playerIndex,
+        //        playerScores = new int[] {
+        //            gameState.GetScore(0),
+        //            gameState.GetScore(1)
+        //        }
+        //    };
+
+        //    if (playerIndex == 0)
+        //    {
+        //        TcpHost.Instance.SendTurnData(scoreSyncMsg);
+        //    }
+        //    else
+        //    {
+        //        TcpClientConnection.Instance.SendTurnData(scoreSyncMsg);
+        //    }
+
+        //    Debug.Log($"分数互换完成：我方 {myScore} -> {gameState.GetScore(playerIndex)}, 对方 {opponentScore} -> {gameState.GetScore((playerIndex + 1) % 2)}");
+        //}
+        if (selectedSkillCard != null)
         {
-            // 获取当前双方分数
-            int myScore = gameState.GetScore(playerIndex);
-            int opponentScore = gameState.GetScore((playerIndex + 1) % 2);
+            ProcessSkill();
 
-            Debug.Log($"镜像前 - 我方:{myScore}, 对方:{opponentScore}");
-
-            // 先计算新的分数
-            int myNewScore = result;
-
-            // 交换分数
-            gameState.AddScore(playerIndex, opponentScore);
-            gameState.AddScore((playerIndex + 1) % 2, myNewScore);
-
-            Debug.Log($"镜像后 - 玩家1: {gameState.GetScore(0)}, 玩家2: {gameState.GetScore(1)}");
-
-            // 发送分数同步消息
-            NetworkMessage scoreSyncMsg = new NetworkMessage
-            {
-                type = "ScoreSync",
-                playerIndex = playerIndex,
-                playerScores = new int[] {
-                    gameState.GetScore(0),
-                    gameState.GetScore(1)
-                }
-            };
-
-            if (playerIndex == 0)
-            {
-                TcpHost.Instance.SendTurnData(scoreSyncMsg);
-            }
-            else
-            {
-                TcpClientConnection.Instance.SendTurnData(scoreSyncMsg);
-            }
-
-            Debug.Log($"分数互换完成：我方 {myScore} -> {gameState.GetScore(playerIndex)}, 对方 {opponentScore} -> {gameState.GetScore((playerIndex + 1) % 2)}");
+            return;
         }
         else
         {
