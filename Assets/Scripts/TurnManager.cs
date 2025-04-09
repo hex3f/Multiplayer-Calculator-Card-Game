@@ -41,6 +41,7 @@ public class TurnManager : MonoBehaviour
     private int targetNumber;
     private int currentNumber; // 当前累计数值
     private bool gameEnded = false;
+    private bool isFrozen = false; // 添加冻结状态变量
 
     private void Awake() => Instance = this;
 
@@ -249,12 +250,52 @@ public class TurnManager : MonoBehaviour
         UpdatePlayCardButtonState();
     }
 
+    // 添加新方法：处理冻结状态下的回合切换
+    private void HandleFrozenTurnSwitch()
+    {
+        if (isFrozen && gameState.IsPlayerTurn(playerIndex))
+        {
+            Debug.Log($"玩家{playerIndex + 1}被冻结，强制切换到对手回合");
+            
+            // 发送跳过回合消息
+            NetworkMessage skipMsg = new NetworkMessage
+            {
+                type = "SkipTurn",
+                playerIndex = playerIndex
+            };
+
+            if (playerIndex == 0)
+            {
+                TcpHost.Instance.SendTurnData(skipMsg);
+            }
+            else
+            {
+                TcpClientConnection.Instance.SendTurnData(skipMsg);
+            }
+
+            // 切换到对手回合
+            int nextPlayerIndex = (playerIndex + 1) % 2;
+            gameState.SetCurrentTurn(nextPlayerIndex);
+            isPlayCard = false;
+            
+            // 更新UI
+            UpdateUI();
+            
+            // 在切换回合后重置冻结状态
+            isFrozen = false;
+            Debug.Log($"玩家{playerIndex + 1}的冻结状态已解除");
+        }
+    }
+
     private void UpdatePlayCardButtonState()
     {
         if (playCardButton != null)
         {
+            // 检查是否被冻结，如果是则切换回合
+            HandleFrozenTurnSwitch();
+            
             // 只要是我的回合且没有被冻结，就可以出牌（包括不出牌）
-            bool canPlay = gameState.IsPlayerTurn(playerIndex) && !isPlayCard;
+            bool canPlay = gameState.IsPlayerTurn(playerIndex) && !isPlayCard && !isFrozen;
             
             // 如果正在处理回合，禁用按钮
             if (isProcessingTurn)
@@ -271,7 +312,8 @@ public class TurnManager : MonoBehaviour
             else
             {
                 string reason = !gameState.IsPlayerTurn(playerIndex) ? "非当前回合" : 
-                               (isProcessingTurn ? "正在处理回合" : "未知原因");
+                               (isProcessingTurn ? "正在处理回合" : 
+                               (isFrozen ? "被冻结" : "未知原因"));
                 Debug.Log($"出牌按钮已禁用，原因: {reason}");
             }
         }
@@ -384,12 +426,16 @@ public class TurnManager : MonoBehaviour
 
     public void OnDrawCardButtonClicked()
     {
-        // 1. 判断是否轮到自己回合 + 是否允许抽牌
-        if (!gameState.IsPlayerTurn(playerIndex) || !isPlayCard)
+        // 检查是否被冻结，如果是则切换回合
+        HandleFrozenTurnSwitch();
+        
+        // 1. 判断是否轮到自己回合 + 是否允许抽牌 + 是否被冻结
+        if (!gameState.IsPlayerTurn(playerIndex) || !isPlayCard || isFrozen)
         {
             string reason = "";
             if (!gameState.IsPlayerTurn(playerIndex)) reason += "不是你的回合；";
             if (!isPlayCard) reason += "当前不能抽牌；";
+            if (isFrozen) reason += "你被冻结了；";
             Debug.Log($"无法抽牌 - 原因: {reason}");
             return;
         }
@@ -563,6 +609,7 @@ public class TurnManager : MonoBehaviour
                 else
                 {
                     // 如果是对手使用冻结，自己被冻结
+                    isFrozen = true;
                     Debug.Log($"玩家{playerIndex + 1}被冻结，下回合将被跳过");
                     
                     // 同步冻结状态回应
@@ -581,6 +628,9 @@ public class TurnManager : MonoBehaviour
                     {
                         TcpClientConnection.Instance.SendTurnData(freezeResponse);
                     }
+
+                    // 检查是否需要立即切换回合
+                    HandleFrozenTurnSwitch();
                 }
                 break;
 
@@ -883,43 +933,46 @@ public class TurnManager : MonoBehaviour
 
     public void OnOpponentTurn(NetworkMessage message)
     {
-        isProcessingTurn = true;
-
-        string msgInfo = $"处理对手消息: {message.type}, 来自玩家: {message.playerIndex}";
-        Debug.Log(msgInfo);
-        
-        // 更新卡牌数量信息（如果有）
-        if (message.numberCardCount > 0 || message.operatorCardCount > 0 || message.skillCardCount > 0)
+        if (message.type == "FreezeStatus")
         {
-            // 记录接收到的卡牌数量信息
-            Debug.Log($"[玩家{playerIndex+1}] 收到卡牌数量同步 - 数字:{message.numberCardCount} 运算牌:{message.operatorCardCount} 特殊运算牌:{message.extraOperatorCardCount} 技能:{message.skillCardCount}");
-            
-            // 由于服务器同步的是卡牌数量，客户端不需要自己计算，直接显示收到的数值
-            if (numberCardCountText != null)
+            if (message.playerIndex == playerIndex)
             {
-                numberCardCountText.text = $"数字牌: {message.numberCardCount}";
-            }
-            
-            if (operatorCardCountText != null)
-            {
-                operatorCardCountText.text = $"运算牌: {message.operatorCardCount}";
-            }
+                // 我被冻结了
+                isFrozen = true;
+                Debug.Log($"玩家{playerIndex + 1}被冻结");
+                
+                // 如果当前是我的回合，立即跳过
+                if (gameState.IsPlayerTurn(playerIndex))
+                {
+                    // 发送跳过回合消息
+                    NetworkMessage skipMsg = new NetworkMessage
+                    {
+                        type = "SkipTurn",
+                        playerIndex = playerIndex
+                    };
 
-            if (extraOperatorCardCountText != null)
-            {
-                extraOperatorCardCountText.text = $"特殊运算牌: {message.extraOperatorCardCount}";
-            }
+                    if (playerIndex == 0)
+                    {
+                        TcpHost.Instance.SendTurnData(skipMsg);
+                    }
+                    else
+                    {
+                        TcpClientConnection.Instance.SendTurnData(skipMsg);
+                    }
 
-            if (skillCardCountText != null)
-            {
-                skillCardCountText.text = $"技能牌: {message.skillCardCount}";
+                    // 切换到对手回合
+                    gameState.SetCurrentTurn((playerIndex + 1) % 2);
+                    isPlayCard = false;
+                    UpdateUI();
+                }
             }
-            
-            // 更新本地CardDeckManager中的牌库计数(仅做显示用，不影响实际牌库)
-            CardDeckManager.Instance.SyncCardCounts(message.numberCardCount, message.operatorCardCount, message.extraOperatorCardCount, message.skillCardCount);
+            else
+            {
+                // 对手被冻结了
+                Debug.Log($"对手(玩家{message.playerIndex + 1})被冻结");
+            }
         }
-
-        if (message.type == "TargetNumber")
+        else if (message.type == "TargetNumber")
         {
             SetTargetNumber(message.targetNumber);
         }
