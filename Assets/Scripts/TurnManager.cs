@@ -311,10 +311,6 @@ public class TurnManager : MonoBehaviour
             
             // 更新UI
             UpdateUI();
-            
-            // 在切换回合后重置冻结状态
-            isFrozen = false;
-            Debug.Log($"玩家{playerIndex + 1}的冻结状态已解除");
         }
     }
 
@@ -675,27 +671,13 @@ public class TurnManager : MonoBehaviour
                 {
                     // 如果是对手使用冻结，自己被冻结
                     isFrozen = true;
-                    Debug.Log($"玩家{playerIndex + 1}被冻结，下回合将被跳过");
+                    Debug.Log($"我被对手冻结了");
                     
-                    // 同步冻结状态回应
-                    NetworkMessage freezeResponse = new NetworkMessage
+                    // 如果当前是我的回合，立即跳过
+                    if (gameState.IsPlayerTurn(playerIndex))
                     {
-                        type = "FreezeStatus",
-                        playerIndex = playerIndex,
-                    };
-                    
-                    // 发送冻结状态确认
-                    if (playerIndex == 0)
-                    {
-                        TcpHost.Instance.SendTurnData(freezeResponse);
+                        HandleFrozenTurnSwitch();
                     }
-                    else
-                    {
-                        TcpClientConnection.Instance.SendTurnData(freezeResponse);
-                    }
-
-                    // 检查是否需要立即切换回合
-                    HandleFrozenTurnSwitch();
                 }
                 break;
 
@@ -1108,26 +1090,7 @@ public class TurnManager : MonoBehaviour
                 // 如果当前是我的回合，立即跳过
                 if (gameState.IsPlayerTurn(playerIndex))
                 {
-                    // 发送跳过回合消息
-                    NetworkMessage skipMsg = new NetworkMessage
-                    {
-                        type = "SkipTurn",
-                        playerIndex = playerIndex
-                    };
-
-                    if (playerIndex == 0)
-                    {
-                        TcpHost.Instance.SendTurnData(skipMsg);
-                    }
-                    else
-                    {
-                        TcpClientConnection.Instance.SendTurnData(skipMsg);
-                    }
-
-                    // 切换到对手回合
-                    gameState.SetCurrentTurn((playerIndex + 1) % 2);
-                    isPlayCard = false;
-                    UpdateUI();
+                    HandleFrozenTurnSwitch();
                 }
             }
             else
