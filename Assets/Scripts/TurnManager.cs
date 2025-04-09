@@ -590,6 +590,24 @@ public class TurnManager : MonoBehaviour
                 int player1Score = gameState.GetScore(1);
                 gameState.AddScore(0, player1Score);
                 gameState.AddScore(1, player0Score);
+                
+                // 发送分数同步消息
+                NetworkMessage scoreSyncMsg = new NetworkMessage
+                {
+                    type = "ScoreSync",
+                    playerIndex = playerIndex,
+                    playerScores = new int[] { gameState.GetScore(0), gameState.GetScore(1) }
+                };
+                
+                if (playerIndex == 0)
+                {
+                    TcpHost.Instance.SendTurnData(scoreSyncMsg);
+                }
+                else
+                {
+                    TcpClientConnection.Instance.SendTurnData(scoreSyncMsg);
+                }
+                
                 Debug.Log($"分数互换：玩家1 {player0Score} <-> 玩家2 {player1Score}");
                 break;
         }
@@ -768,11 +786,13 @@ public class TurnManager : MonoBehaviour
         // 更新分数显示
         if (player1ScoreText != null)
         {
-            player1ScoreText.text = $"{gameState.GetScore(0)}";
+            // player1ScoreText 永远显示自己的分数
+            player1ScoreText.text = $"{gameState.GetScore(playerIndex)}";
         }
         if (player2ScoreText != null)
         {
-            player2ScoreText.text = $"{gameState.GetScore(1)}";
+            // player2ScoreText 永远显示对手的分数
+            player2ScoreText.text = $"{gameState.GetScore((playerIndex + 1) % 2)}";
         }
 
         // 更新按钮状态
@@ -922,6 +942,17 @@ public class TurnManager : MonoBehaviour
             gameState.SetCurrentTurn(playerIndex);
             isPlayCard = false;
             UpdateUI();
+        }
+        else if (message.type == "ScoreSync")
+        {
+            // 更新双方分数
+            if (message.playerScores != null && message.playerScores.Length == 2)
+            {
+                gameState.AddScore(0, message.playerScores[0]);
+                gameState.AddScore(1, message.playerScores[1]);
+                Debug.Log($"收到分数同步：玩家1 {message.playerScores[0]}, 玩家2 {message.playerScores[1]}");
+                UpdateUI();
+            }
         }
         else if (message.type == "DrawCardResponse")
         {
