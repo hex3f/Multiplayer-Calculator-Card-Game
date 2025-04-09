@@ -99,6 +99,7 @@ public class HandManager : MonoBehaviour
     {
         if (selectedCards.Contains(card))
         {
+            Debug.Log(11111111111111);
             return;
         }
 

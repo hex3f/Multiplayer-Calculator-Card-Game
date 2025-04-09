@@ -31,9 +31,14 @@ public class CardUI : MonoBehaviour
             cardText.text = card.GetSkillName();
             cardBackground.sprite = skillSprite;
         }
-        else if (card.type == CardType.Operator || card.type == CardType.ExtraOperator)
+        else if (card.type == CardType.Operator)
         {
             cardText.text = card.GetOperatorSymbol();
+            cardBackground.sprite = operatorSprite;
+        }
+        else if (card.type == CardType.ExtraOperator)
+        {
+            cardText.text = card.GetExtraOperatorSymbol();
             cardBackground.sprite = operatorSprite;
         }
 

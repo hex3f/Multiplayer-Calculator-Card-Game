@@ -57,7 +57,6 @@ public class GameState : MonoBehaviour
             playerScores[i] = 1;
         }
     }
-
     public void NextTurn()
     {
         currentPlayerTurn = (currentPlayerTurn + 1) % playerCount;

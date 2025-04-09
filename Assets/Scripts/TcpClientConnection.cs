@@ -94,8 +94,8 @@ public class TcpClientConnection : MonoBehaviour
             case "DeckUpdate":
                 // 处理牌库数量更新
                 Debug.Log($"[客户端] 收到牌库数量更新: 数字牌:{message.numberCardCount} 运算符:{message.operatorCardCount} 技能牌:{message.skillCardCount}");
-                CardDeckManager.Instance.SyncCardCounts(message.numberCardCount, message.operatorCardCount, message.skillCardCount);
-                TurnManager.Instance.UpdateCardCountDisplay(message.numberCardCount, message.operatorCardCount, message.skillCardCount);
+                CardDeckManager.Instance.SyncCardCounts(message.numberCardCount, message.operatorCardCount, message.extraOperatorCardCount, message.skillCardCount);
+                TurnManager.Instance.UpdateCardCountDisplay(message.numberCardCount, message.operatorCardCount, message.extraOperatorCardCount, message.skillCardCount);
                 break;
             case "TargetNumber":
             case "RequestTargetNumber":

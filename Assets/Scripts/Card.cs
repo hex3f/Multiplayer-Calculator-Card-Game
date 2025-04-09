@@ -14,6 +14,10 @@ public enum OperatorType
     Subtract,
     Multiply,
     Divide,
+}
+
+public enum ExtraOperatorType
+{
     Square,
     SquareRoot
 }
@@ -31,6 +35,7 @@ public class Card
     public CardType type;
     public int numberValue;
     public OperatorType operatorType;
+    public ExtraOperatorType extraOperatorType;
     public SkillType skillType;
 
     public string GetDisplayText()
@@ -41,6 +46,8 @@ public class Card
                 return $"数字卡 {numberValue}";
             case CardType.Operator:
                 return $"运算符卡 {GetOperatorSymbol()}";
+            case CardType.ExtraOperator:
+                return $"特殊运算符卡 {GetExtraOperatorSymbol()}";
             case CardType.Skill:
                 return $"技能卡 {GetSkillName()}";
             default:
@@ -56,8 +63,16 @@ public class Card
             case OperatorType.Subtract: return "-";
             case OperatorType.Multiply: return "×";
             case OperatorType.Divide: return "÷";
-            case OperatorType.Square: return "Square";
-            case OperatorType.SquareRoot: return "SquareRoot";
+            default: return "?";
+        }
+    }
+
+    public string GetExtraOperatorSymbol()
+    {
+        switch (extraOperatorType)
+        {
+            case ExtraOperatorType.Square: return "Square";
+            case ExtraOperatorType.SquareRoot: return "SquareRoot";
             default: return "?";
         }
     }
@@ -85,8 +100,19 @@ public class Card
                     case OperatorType.Divide: return playerValue != 0 ? currentValue / playerValue : currentValue;
                     default: return currentValue;
                 }
+            case CardType.ExtraOperator:
+                switch (extraOperatorType)
+                {
+                    case ExtraOperatorType.Square:
+                        return currentValue * currentValue;
+                    case ExtraOperatorType.SquareRoot:
+                        return (int)Mathf.Sqrt(currentValue);  // 强制转换为 int（因为 Sqrt 返回 float）
+                    default:
+                        return currentValue;
+                }
             default:
                 return currentValue;
         }
     }
+
 }

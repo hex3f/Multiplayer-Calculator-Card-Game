@@ -235,7 +235,7 @@ public class TcpHost : MonoBehaviour
             message.skillCardCount = CardDeckManager.Instance.GetSkillCardCount();
             
             // 记录日志以便调试
-            Debug.Log($"[主机] 发送卡牌数量 - 数字:{message.numberCardCount} 运算符:{message.operatorCardCount} 技能:{message.skillCardCount}");
+            Debug.Log($"[主机] 发送卡牌数量 - 数字:{message.numberCardCount} 运算符:{message.operatorCardCount} 特殊运算符:{message.extraOperatorCardCount} 技能:{message.skillCardCount}");
             
             string json = JsonUtility.ToJson(message);
             byte[] data = Encoding.UTF8.GetBytes(json);

@@ -8,8 +8,7 @@ public class CardDeckManager : MonoBehaviour
     private List<Card> deck = new List<Card>();
     private List<Card> discardPile = new List<Card>();
     private int currentRound = 0;
-    private const int MAX_ROUNDS = 10;
-    private GameField currentField = GameField.Normal;
+    private const int MAX_ROUNDS = 5;
     public int MinNumber;
     public int MaxNumber;
 
@@ -31,7 +30,6 @@ public class CardDeckManager : MonoBehaviour
         deck.Clear();
         discardPile.Clear();
         currentRound = 0;
-        currentField = GameField.Normal;
 
         // 添加基础数字牌 (1-12，每个数字3张)
         for (int i = 1; i <= 12; i++)
@@ -42,17 +40,19 @@ public class CardDeckManager : MonoBehaviour
             }
         }
 
-        // 添加运算符牌（包括特殊运算符牌）
-        for (int i = 0; i < 8; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Add });
-        for (int i = 0; i < 6; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Subtract });
-        for (int i = 0; i < 8; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Multiply });
-        for (int i = 0; i < 4; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Divide });
-        for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Square });
-        for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.SquareRoot });
+        // 添加运算符牌
+        for (int i = 0; i < 9; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Add });
+        for (int i = 0; i < 9; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Subtract });
+        for (int i = 0; i < 4; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Multiply });
+        for (int i = 0; i < 2; i++) deck.Add(new Card { type = CardType.Operator, operatorType = OperatorType.Divide });
+
+        // 添加特殊运算符牌
+        for (int i = 0; i < 2; i++) deck.Add(new Card { type = CardType.ExtraOperator, extraOperatorType = ExtraOperatorType.Square });
+        for (int i = 0; i < 2; i++) deck.Add(new Card { type = CardType.ExtraOperator, extraOperatorType = ExtraOperatorType.SquareRoot });
 
         // 添加技能牌
-        for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.Skill, skillType = SkillType.Freeze });
-        for (int i = 0; i < 3; i++) deck.Add(new Card { type = CardType.Skill, skillType = SkillType.Mirror });
+        for (int i = 0; i < 2; i++) deck.Add(new Card { type = CardType.Skill, skillType = SkillType.Freeze });
+        for (int i = 0; i < 2; i++) deck.Add(new Card { type = CardType.Skill, skillType = SkillType.Mirror });
 
         ShuffleDeck();
         
@@ -81,8 +81,8 @@ public class CardDeckManager : MonoBehaviour
 
         List<Card> hand = new List<Card>();
         
-        // 抽取3张数字牌
-        for (int i = 0; i < 3; i++)
+        // 抽取2张数字牌
+        for (int i = 0; i < 2; i++)
         {
             Card card = DrawCard();
             while (card != null && card.type != CardType.Number)
@@ -110,6 +110,22 @@ public class CardDeckManager : MonoBehaviour
             if (operatorCard != null)
             {
                 hand.Add(operatorCard);
+            }
+        }
+
+        // 抽取1张特殊运算牌
+        for (int i = 0; i < 1; i++)
+        {
+            Card extraOperatorCard = DrawCard();
+            while (extraOperatorCard != null && extraOperatorCard.type != CardType.ExtraOperator)
+            {
+                // 如果不是运算牌，放回牌堆底部
+                deck.Add(extraOperatorCard);
+                extraOperatorCard = DrawCard();
+            }
+            if (extraOperatorCard != null)
+            {
+                hand.Add(extraOperatorCard);
             }
         }
 
@@ -160,31 +176,6 @@ public class CardDeckManager : MonoBehaviour
         return Random.Range(MinNumber, MaxNumber);
     }
 
-    public void NextRound()
-    {
-        currentRound++;
-        
-        // 每5回合出现一次特殊领域（第5、10、15回合...）
-        if (currentRound % 5 == 0)
-        {
-            // 随机选择一个特殊领域（平方或开方）
-            int fieldType = Random.Range(1, 3); // 1=平方，2=开方
-            currentField = (GameField)fieldType;
-            Debug.Log($"第{currentRound}回合，进入特殊领域：{(fieldType == 1 ? "平方领域" : "开方领域")}");
-        }
-        else
-        {
-            // 其他回合使用普通领域
-            currentField = GameField.Normal;
-            Debug.Log($"第{currentRound}回合，普通领域");
-        }
-    }
-
-    public GameField GetCurrentField()
-    {
-        return currentField;
-    }
-
     public int GetCurrentRound()
     {
         return currentRound;
@@ -205,7 +196,11 @@ public class CardDeckManager : MonoBehaviour
     {
         return CountCardsByType(CardType.Operator);
     }
-    
+    public int GetExtraOperatorCardCount()
+    {
+        return CountCardsByType(CardType.ExtraOperator);
+    }
+
     public int GetSkillCardCount()
     {
         return CountCardsByType(CardType.Skill);
@@ -231,17 +226,18 @@ public class CardDeckManager : MonoBehaviour
         
         counts[CardType.Number] = GetNumberCardCount();
         counts[CardType.Operator] = GetOperatorCardCount();
+        counts[CardType.ExtraOperator] = GetExtraOperatorCardCount();
         counts[CardType.Skill] = GetSkillCardCount();
         
         return counts;
     }
 
     // 用于网络同步，更新牌库数量（仅客户端使用）
-    public void SyncCardCounts(int numberCount, int operatorCount, int skillCount)
+    public void SyncCardCounts(int numberCount, int operatorCount, int extraOperatorCount, int skillCount)
     {
         // 这个方法用于客户端接收服务器同步的牌库数量
         // 我们不直接修改deck，因为客户端不处理具体的牌，只需要知道牌库数量
-        Debug.Log($"同步牌库数量: 数字:{numberCount} 运算符:{operatorCount} 技能:{skillCount}");
+        Debug.Log($"同步牌库数量: 数字:{numberCount} 运算符:{operatorCount} 特殊运算符:{extraOperatorCount} 技能:{skillCount}");
         
         // 可以在这里添加逻辑来模拟牌库数量变化的视觉效果
         // 例如显示抽牌动画等
@@ -252,11 +248,4 @@ public class CardDeckManager : MonoBehaviour
     {
         return deck.Count;
     }
-}
-
-public enum GameField
-{
-    Normal,
-    Square,
-    SquareRoot
 }

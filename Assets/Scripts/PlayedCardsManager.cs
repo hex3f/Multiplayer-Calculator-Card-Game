@@ -76,6 +76,7 @@ public class PlayedCardsManager : MonoBehaviour
                 case CardType.Number:
                     return playerNumberCardsContainer;
                 case CardType.Operator:
+                case CardType.ExtraOperator:
                     return playerOperatorCardsContainer;
                 case CardType.Skill:
                     return playerSkillCardsContainer;
@@ -90,6 +91,7 @@ public class PlayedCardsManager : MonoBehaviour
                 case CardType.Number:
                     return opponentNumberCardsContainer;
                 case CardType.Operator:
+                case CardType.ExtraOperator:
                     return opponentOperatorCardsContainer;
                 case CardType.Skill:
                     return opponentSkillCardsContainer;

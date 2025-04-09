@@ -7,9 +7,9 @@ public class GameClient
 {
     public int playerIndex { get; set; }
     private NetworkStream stream;
-    public System.Net.Sockets.TcpClient client { get; private set; }
+    public TcpClient client { get; private set; }
 
-    public GameClient(NetworkStream stream, System.Net.Sockets.TcpClient client)
+    public GameClient(NetworkStream stream, TcpClient client)
     {
         this.stream = stream;
         this.client = client;
