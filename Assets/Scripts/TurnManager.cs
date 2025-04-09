@@ -41,7 +41,7 @@ public class TurnManager : MonoBehaviour
     private int targetNumber;
     private int currentNumber; // 当前累计数值
     private bool gameEnded = false;
-    private bool isFrozen = false; // 添加冻结状态变量
+    public bool isFrozen = false; // 添加冻结状态变量
 
     private void Awake() => Instance = this;
 
@@ -298,17 +298,23 @@ public class TurnManager : MonoBehaviour
             if (playerIndex == 0)
             {
                 TcpHost.Instance.SendTurnData(skipMsg);
+                forzenCount++;
+                if (forzenCount == 2)
+                {
+                    forzenCount = 0;
+                    isFrozen = false;
+                }
             }
             else
             {
                 TcpClientConnection.Instance.SendTurnData(skipMsg);
+                isFrozen = false;
             }
 
             // 切换到对手回合
             int nextPlayerIndex = (playerIndex + 1) % 2;
             gameState.SetCurrentTurn(nextPlayerIndex);
             isPlayCard = false;
-            
             // 更新UI
             UpdateUI();
         }
@@ -1076,6 +1082,8 @@ public class TurnManager : MonoBehaviour
         yield return new WaitForSeconds(resultDisplayTime);
         resultTextObject.SetActive(false);
     }
+
+    int forzenCount = 0;
 
     public void OnOpponentTurn(NetworkMessage message)
     {
