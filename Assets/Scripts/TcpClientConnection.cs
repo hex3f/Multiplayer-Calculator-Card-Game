@@ -171,8 +171,14 @@ public class TcpClientConnection : MonoBehaviour
                 case "ScoreSync":
                     if (message.playerScores != null && message.playerScores.Length == 2)
                     {
-                        TurnManager.Instance.ScoreUpdate(message.playerScores[0], message.playerScores[1]);
-                        Debug.Log($"收到分数同步：玩家1 {message.playerScores[0]}, 玩家2 {message.playerScores[1]}");
+                        int myIndex = TurnManager.Instance.playerIndex; // ← 新增方法，获取本地玩家 index
+                        int opponentIndex = (myIndex + 1) % 2;
+
+                        GameState.Instance.AddScore(myIndex, message.playerScores[myIndex]);
+                        GameState.Instance.AddScore(opponentIndex, message.playerScores[opponentIndex]);
+
+                        Debug.Log($"[客户端] ScoreSync 同步：我({myIndex})={message.playerScores[myIndex]}, 对手({opponentIndex})={message.playerScores[opponentIndex]}");
+
                         TurnManager.Instance.UpdateUI();
                     }
                     break;

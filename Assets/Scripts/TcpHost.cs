@@ -226,6 +226,17 @@ public class TcpHost : MonoBehaviour
                             // 处理冻结状态同步
                             TurnManager.Instance.OnOpponentTurn(message);
                         }
+                        else if (message.type == "ScoreSync")
+                        {
+                            // 处理分数同步消息
+                            if (message.playerScores != null && message.playerScores.Length == 2)
+                            {
+                                GameState.Instance.AddScore(0, message.playerScores[0]);
+                                GameState.Instance.AddScore(1, message.playerScores[1]);
+                                Debug.Log($"[服务器] 收到分数同步：玩家1 {message.playerScores[0]}, 玩家2 {message.playerScores[1]}");
+                                TurnManager.Instance.UpdateUI();
+                            }
+                        }
                         else
                         {
                             TurnManager.Instance.OnOpponentTurn(message);

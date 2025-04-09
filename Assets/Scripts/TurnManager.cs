@@ -34,7 +34,7 @@ public class TurnManager : MonoBehaviour
     private Card selectedExtraOperatorCard;
     private Card selectedSkillCard;
     private GameState gameState;
-    private int playerIndex;
+    public int playerIndex;
     private bool isProcessingTurn;
     private bool isPlayCard;
     private NetworkMessage lastTurnData;
@@ -693,36 +693,44 @@ public class TurnManager : MonoBehaviour
                 break;
 
             case SkillType.Mirror:
-                // 交换双方分数
-                int player0Score = gameState.GetScore(0);
-                int player1Score = gameState.GetScore(1);
-                
-                // 先保存当前分数
-                int tempScore0 = player0Score;
-                int tempScore1 = player1Score;
-                
-                // 交换分数
-                gameState.AddScore(0, tempScore1);
-                gameState.AddScore(1, tempScore0);
-                
-                // 发送分数同步消息
-                NetworkMessage scoreSyncMsg = new NetworkMessage
+                // 如果同时选择了数字牌和运算符牌，不在这里处理分数交换
+                // 分数交换会在 ProcessTurn 中处理
+                if (selectedNumberCard == null || selectedOperatorCard == null)
                 {
-                    type = "ScoreSync",
-                    playerIndex = playerIndex,
-                    playerScores = new int[] { gameState.GetScore(0), gameState.GetScore(1) }
-                };
-                
-                if (playerIndex == 0)
-                {
-                    TcpHost.Instance.SendTurnData(scoreSyncMsg);
+                    // 交换双方分数
+                    int player0Score = gameState.GetScore(0);
+                    int player1Score = gameState.GetScore(1);
+                    
+                    // 先保存当前分数
+                    int tempScore0 = player0Score;
+                    int tempScore1 = player1Score;
+                    
+                    // 交换分数
+                    gameState.AddScore(0, tempScore1);
+                    gameState.AddScore(1, tempScore0);
+                    
+                    // 发送分数同步消息
+                    NetworkMessage scoreSyncMsg = new NetworkMessage
+                    {
+                        type = "ScoreSync",
+                        playerIndex = playerIndex,
+                        playerScores = new int[] { gameState.GetScore(0), gameState.GetScore(1) }
+                    };
+                    
+                    // 确保消息发送给对手
+                    if (playerIndex == 0)
+                    {
+                        // 玩家1发送给玩家2
+                        TcpHost.Instance.SendTurnData(scoreSyncMsg);
+                        Debug.Log($"[服务器] 玩家1发送分数同步消息给玩家2：玩家1 {gameState.GetScore(0)}, 玩家2 {gameState.GetScore(1)}");
+                    }
+                    else
+                    {
+                        // 玩家2发送给玩家1
+                        TcpClientConnection.Instance.SendTurnData(scoreSyncMsg);
+                        Debug.Log($"[客户端] 玩家2发送分数同步消息给玩家1：玩家1 {gameState.GetScore(0)}, 玩家2 {gameState.GetScore(1)}");
+                    }
                 }
-                else
-                {
-                    TcpClientConnection.Instance.SendTurnData(scoreSyncMsg);
-                }
-                
-                Debug.Log($"分数互换：玩家1 {tempScore0} <-> 玩家2 {tempScore1}");
                 break;
         }
 
