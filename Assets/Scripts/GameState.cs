@@ -73,6 +73,8 @@ public class GameState : MonoBehaviour
         if (playerIndex >= 0 && playerIndex < playerScores.Length)
         {
             playerScores[playerIndex] = value;
+
+            Debug.Log(value);
         }
     }
 

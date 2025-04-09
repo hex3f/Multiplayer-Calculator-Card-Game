@@ -847,56 +847,64 @@ public class TurnManager : MonoBehaviour
         int oldScore = gameState.GetScore(playerIndex);
 
         // 如果是镜像技能，先不更新分数，而是直接交换
-        //if (selectedSkillCard != null && selectedSkillCard.skillType == SkillType.Mirror)
-        //{
-        //    // 获取当前双方分数
-        //    int myScore = gameState.GetScore(playerIndex);
-        //    int opponentScore = gameState.GetScore((playerIndex + 1) % 2);
+        if (selectedSkillCard != null && selectedSkillCard.skillType == SkillType.Mirror)
+        {
+            // 获取当前双方分数
+            int myScore = gameState.GetScore(playerIndex);
+            int opponentScore = gameState.GetScore((playerIndex + 1) % 2);
 
-        //    Debug.Log($"镜像前 - 我方:{myScore}, 对方:{opponentScore}");
+            Debug.Log($"镜像前 - 我方:{myScore}, 对方:{opponentScore}");
 
-        //    // 先计算新的分数
-        //    int myNewScore = result;
+            // 先计算新的分数
+            int myNewScore = result;
 
-        //    // 交换分数
-        //    gameState.AddScore(playerIndex, opponentScore);
-        //    gameState.AddScore((playerIndex + 1) % 2, myNewScore);
+            // 交换分数
+            gameState.AddScore(playerIndex, opponentScore);
+            gameState.AddScore((playerIndex + 1) % 2, myNewScore);
 
-        //    Debug.Log($"镜像后 - 玩家1: {gameState.GetScore(0)}, 玩家2: {gameState.GetScore(1)}");
+            Debug.Log($"镜像后 - 玩家1: {gameState.GetScore(0)}, 玩家2: {gameState.GetScore(1)}");
 
-        //    // 发送分数同步消息
-        //    NetworkMessage scoreSyncMsg = new NetworkMessage
-        //    {
-        //        type = "ScoreSync",
-        //        playerIndex = playerIndex,
-        //        playerScores = new int[] {
-        //            gameState.GetScore(0),
-        //            gameState.GetScore(1)
-        //        }
-        //    };
+            // 发送分数同步消息
+            NetworkMessage scoreSyncMsg = new NetworkMessage
+            {
+                type = "ScoreSync",
+                playerIndex = playerIndex,
+                playerScores = new int[] {
+                    gameState.GetScore(0),
+                    gameState.GetScore(1)
+                }
+            };
 
-        //    if (playerIndex == 0)
-        //    {
-        //        TcpHost.Instance.SendTurnData(scoreSyncMsg);
-        //    }
-        //    else
-        //    {
-        //        TcpClientConnection.Instance.SendTurnData(scoreSyncMsg);
-        //    }
+            if (playerIndex == 0)
+            {
+                TcpHost.Instance.SendTurnData(scoreSyncMsg);
+            }
+            else
+            {
+                TcpClientConnection.Instance.SendTurnData(scoreSyncMsg);
+            }
 
-        //    Debug.Log($"分数互换完成：我方 {myScore} -> {gameState.GetScore(playerIndex)}, 对方 {opponentScore} -> {gameState.GetScore((playerIndex + 1) % 2)}");
-        //}
-        if (selectedSkillCard != null)
+            Debug.Log($"分数互换完成：我方 {myScore} -> {gameState.GetScore(playerIndex)}, 对方 {opponentScore} -> {gameState.GetScore((playerIndex + 1) % 2)}");
+        }
+        else
+        {
+            if (selectedSkillCard != null && selectedSkillCard.skillType == SkillType.Freeze)
+            {
+
+            }
+            else
+            {
+                gameState.AddScore(playerIndex, result);
+                Debug.Log($"计算后分数 - 玩家{playerIndex + 1}: {result} (原分数:{oldScore})");
+            }
+
+        }
+
+        if (selectedSkillCard != null && selectedSkillCard.skillType == SkillType.Freeze)
         {
             ProcessSkill();
 
             return;
-        }
-        else
-        {
-            // 如果不是镜像技能，正常更新分数
-            gameState.AddScore(playerIndex, result);
-            Debug.Log($"计算后分数 - 玩家{playerIndex + 1}: {result} (原分数:{oldScore})");
         }
 
         // 创建网络消息
