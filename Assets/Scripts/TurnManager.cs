@@ -935,6 +935,14 @@ public class TurnManager : MonoBehaviour
             {
                 ShowResult("牌库已空");
             }
+            
+            // 如果是客户端摸牌，切换到主机回合
+            if (playerIndex == 1)
+            {
+                gameState.SetCurrentTurn(0); // 切换到主机回合
+                isPlayCard = false;
+            }
+            
             UpdateUI();
         }
         else if (message.type == "SkipTurn")
