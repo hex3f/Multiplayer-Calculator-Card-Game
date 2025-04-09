@@ -124,6 +124,30 @@ public class TurnManager : MonoBehaviour
         selectedSkillCard = null;
         playedCardsManager.ClearCards(true);
         playedCardsManager.ClearCards(false);
+        
+        // 更新牌堆数量显示
+        if (playerIndex == 0) // 只有主机需要更新牌堆数量
+        {
+            int numberCount = CardDeckManager.Instance.GetNumberCardCount();
+            int operatorCount = CardDeckManager.Instance.GetOperatorCardCount();
+            int extraOperatorCount = CardDeckManager.Instance.GetExtraOperatorCardCount();
+            int skillCount = CardDeckManager.Instance.GetSkillCardCount();
+            
+            Debug.Log($"[主机] 初始手牌后更新牌堆数量 - 数字:{numberCount} 运算符:{operatorCount} 特殊运算符:{extraOperatorCount} 技能:{skillCount}");
+            
+            // 发送牌堆数量更新消息
+            NetworkMessage deckUpdateMsg = new NetworkMessage
+            {
+                type = "DeckUpdate",
+                numberCardCount = numberCount,
+                operatorCardCount = operatorCount,
+                extraOperatorCardCount = extraOperatorCount,
+                skillCardCount = skillCount
+            };
+            
+            TcpHost.Instance.SendTurnData(deckUpdateMsg);
+        }
+        
         UpdateUI();
     }
 
@@ -179,9 +203,12 @@ public class TurnManager : MonoBehaviour
     {
         if (isProcessingTurn) return;
 
+        Debug.Log($"点击卡牌: {card.GetDisplayText()}");
+
         // 如果卡牌已经被选中，则取消选择
         if ((card == selectedNumberCard) || (card == selectedOperatorCard) || (card == selectedExtraOperatorCard) || (card == selectedSkillCard))
         {
+            Debug.Log($"取消选择卡牌: {card.GetDisplayText()}");
             switch (card.type)
             {
                 case CardType.Number:
@@ -213,6 +240,7 @@ public class TurnManager : MonoBehaviour
                 }
                 selectedNumberCard = card;
                 handManager.SelectCard(card);
+                Debug.Log($"选择数字牌: {card.GetDisplayText()}");
                 break;
 
             case CardType.Operator:
@@ -223,6 +251,7 @@ public class TurnManager : MonoBehaviour
                 }
                 selectedOperatorCard = card;
                 handManager.SelectCard(card);
+                Debug.Log($"选择运算符牌: {card.GetDisplayText()}");
                 break;
 
             case CardType.ExtraOperator:
@@ -233,6 +262,7 @@ public class TurnManager : MonoBehaviour
                 }
                 selectedExtraOperatorCard = card;
                 handManager.SelectCard(card);
+                Debug.Log($"选择特殊运算符牌: {card.GetDisplayText()}");
                 break;
 
             case CardType.Skill:
@@ -243,6 +273,7 @@ public class TurnManager : MonoBehaviour
                 }
                 selectedSkillCard = card;
                 handManager.SelectCard(card);
+                Debug.Log($"选择技能牌: {card.GetDisplayText()}");
                 break;
         }
 
@@ -329,10 +360,17 @@ public class TurnManager : MonoBehaviour
         isProcessingTurn = true;
         isPlayCard = true;
 
+        Debug.Log("点击出牌按钮");
+        Debug.Log($"当前选中状态 - 数字牌: {(selectedNumberCard != null ? selectedNumberCard.GetDisplayText() : "null")}, " +
+                 $"运算符牌: {(selectedOperatorCard != null ? selectedOperatorCard.GetDisplayText() : "null")}, " +
+                 $"特殊运算符牌: {(selectedExtraOperatorCard != null ? selectedExtraOperatorCard.GetDisplayText() : "null")}, " +
+                 $"技能牌: {(selectedSkillCard != null ? selectedSkillCard.GetDisplayText() : "null")}");
+
         // 如果没有选择任何牌，直接返回
         if (selectedNumberCard == null && selectedOperatorCard == null && 
             selectedExtraOperatorCard == null && selectedSkillCard == null)
         {
+            Debug.Log("没有选择任何卡牌");
             isProcessingTurn = false;
             return;
         }
@@ -340,38 +378,52 @@ public class TurnManager : MonoBehaviour
         // 检查出牌规则
         bool isValidPlay = false;
         
-        // 必须有数字牌
-        if (selectedNumberCard != null)
+        // 规则1：技能牌
+        if (selectedSkillCard != null && selectedNumberCard == null && 
+            selectedOperatorCard == null && selectedExtraOperatorCard == null)
         {
-            // 规则1：数字+运算符
-            if (selectedOperatorCard != null && selectedExtraOperatorCard == null && selectedSkillCard == null)
-            {
-                isValidPlay = true;
-            }
-            // 规则2：数字+特殊运算符
-            else if (selectedOperatorCard == null && selectedExtraOperatorCard != null && selectedSkillCard == null)
-            {
-                isValidPlay = true;
-            }
-            // 规则3：数字+特殊运算符+运算符
-            else if (selectedOperatorCard != null && selectedExtraOperatorCard != null && selectedSkillCard == null)
-            {
-                isValidPlay = true;
-            }
-            // 规则4：数字+运算符+技能牌
-            else if (selectedOperatorCard != null && selectedExtraOperatorCard == null && selectedSkillCard != null)
-            {
-                isValidPlay = true;
-            }
-            // 规则5：数字+特殊运算符+技能牌
-            else if (selectedOperatorCard == null && selectedExtraOperatorCard != null && selectedSkillCard != null)
-            {
-                isValidPlay = true;
-            }
+            Debug.Log("规则1：单独使用技能牌");
+            isValidPlay = true;
+        }
+        // 规则2：数字+运算
+        else if (selectedNumberCard != null && selectedOperatorCard != null && 
+                 selectedExtraOperatorCard == null && selectedSkillCard == null)
+        {
+            Debug.Log("规则2：数字+运算");
+            isValidPlay = true;
+        }
+        // 规则3：数字+特殊运算
+        else if (selectedNumberCard != null && selectedOperatorCard == null && 
+                 selectedExtraOperatorCard != null && selectedSkillCard == null)
+        {
+            Debug.Log("规则3：数字+特殊运算");
+            isValidPlay = true;
+        }
+        // 规则4：数字+特殊运算+运算（顺序先计算特殊运算再计算运算）
+        else if (selectedNumberCard != null && selectedOperatorCard != null && 
+                 selectedExtraOperatorCard != null && selectedSkillCard == null)
+        {
+            Debug.Log("规则4：数字+特殊运算+运算");
+            isValidPlay = true;
+        }
+        // 规则5：数字+运算+技能
+        else if (selectedNumberCard != null && selectedOperatorCard != null && 
+                 selectedExtraOperatorCard == null && selectedSkillCard != null)
+        {
+            Debug.Log("规则5：数字+运算+技能");
+            isValidPlay = true;
+        }
+        // 规则6：数字+特殊运算+技能
+        else if (selectedNumberCard != null && selectedOperatorCard == null && 
+                 selectedExtraOperatorCard != null && selectedSkillCard != null)
+        {
+            Debug.Log("规则6：数字+特殊运算+技能");
+            isValidPlay = true;
         }
 
         if (!isValidPlay)
         {
+            Debug.Log("出牌组合不符合规则");
             // 取消所有选择
             if (selectedNumberCard != null)
             {
@@ -398,13 +450,15 @@ public class TurnManager : MonoBehaviour
         }
 
         // 如果选择了技能牌，先处理技能
-        if (selectedSkillCard != null)
+        if (selectedNumberCard == null && selectedSkillCard != null)
         {
+            Debug.Log("开始处理技能牌");
             ProcessSkill();
             return;
         }
         
         // 否则处理数字和运算符
+        Debug.Log("开始处理数字和运算符");
         ProcessTurn();
     }
 
@@ -680,12 +734,43 @@ public class TurnManager : MonoBehaviour
             // 如果同时选择了数字牌和运算符牌，继续处理
             if (selectedNumberCard != null && selectedOperatorCard != null)
             {
-                ProcessTurn();
-                return; // 让ProcessTurn处理回合结束
-            }
+                // 不再调用ProcessTurn，而是直接处理数字和运算符
+                List<Card> playedCards = new List<Card>();
+                playedCards.Add(selectedNumberCard);
+                playedCards.Add(selectedOperatorCard);
+                
+                int result = CalculateResult(playedCards);
+                gameState.AddScore(playerIndex, result);
+                
+                // 创建网络消息
+                NetworkMessage message = new NetworkMessage
+                {
+                    type = "Turn",
+                    playerIndex = playerIndex,
+                    playedCards = playedCards,
+                    result = result,
+                };
 
-            // 如果只使用了技能牌
-            handManager.DeselectCard();
+                // 发送消息
+                if (playerIndex == 0)
+                {
+                    TcpHost.Instance.SendTurnData(message);
+                }
+                else
+                {
+                    TcpClientConnection.Instance.SendTurnData(message);
+                }
+
+                // 重置选择
+                selectedNumberCard = null;
+                selectedOperatorCard = null;
+                handManager.DeselectCard();
+            }
+            else
+            {
+                // 如果只使用了技能牌
+                handManager.DeselectCard();
+            }
             
             // 确保当前回合仍然是自己的
             gameState.SetCurrentTurn(playerIndex);
@@ -722,41 +807,103 @@ public class TurnManager : MonoBehaviour
         isProcessingTurn = true;
         List<Card> playedCards = new List<Card>();
 
-        // 添加数字牌
+        Debug.Log($"ProcessTurn开始 - selectedSkillCard: {(selectedSkillCard != null ? selectedSkillCard.GetDisplayText() : "null")}");
+
+        // 按照特定顺序添加卡牌，确保显示顺序正确
+        // 1. 先添加数字牌
         if (selectedNumberCard != null)
         {
+            Debug.Log("添加数字牌");
             playedCards.Add(selectedNumberCard);
             handManager.RemoveCard(selectedNumberCard);
-            playedCardsManager.AddCard(selectedNumberCard, true); // 添加到玩家区域
+            playedCardsManager.AddCard(selectedNumberCard, true);
         }
 
-        // 添加运算符牌
+        // 2. 再添加运算符牌
         if (selectedOperatorCard != null)
         {
+            Debug.Log("添加运算符牌");
             playedCards.Add(selectedOperatorCard);
             handManager.RemoveCard(selectedOperatorCard);
-            playedCardsManager.AddCard(selectedOperatorCard, true); // 添加到玩家区域
+            playedCardsManager.AddCard(selectedOperatorCard, true);
         }
 
-        // 添加特殊运算符牌
+        // 3. 再添加特殊运算符牌
         if (selectedExtraOperatorCard != null)
         {
+            Debug.Log("添加特殊运算符牌");
             playedCards.Add(selectedExtraOperatorCard);
             handManager.RemoveCard(selectedExtraOperatorCard);
-            playedCardsManager.AddCard(selectedExtraOperatorCard, true); // 添加到玩家区域
+            playedCardsManager.AddCard(selectedExtraOperatorCard, true);
         }
 
-        // 添加技能牌
+        // 4. 最后添加技能牌
         if (selectedSkillCard != null)
         {
+            Debug.Log($"添加技能牌: {selectedSkillCard.GetDisplayText()}");
             playedCards.Add(selectedSkillCard);
             handManager.RemoveCard(selectedSkillCard);
-            playedCardsManager.AddCard(selectedSkillCard, true); // 添加到玩家区域
+            playedCardsManager.AddCard(selectedSkillCard, true);
+        }
+        else
+        {
+            Debug.Log("selectedSkillCard为null，无法添加技能牌");
         }
 
         // 处理不同类型的运算符
         int result = CalculateResult(playedCards);
-        gameState.AddScore(playerIndex, result);
+        
+        Debug.Log($"出牌前分数 - 玩家1: {gameState.GetScore(0)}, 玩家2: {gameState.GetScore(1)}");
+        
+        // 先更新当前玩家的分数
+        int oldScore = gameState.GetScore(playerIndex);
+
+        // 如果是镜像技能，先不更新分数，而是直接交换
+        if (selectedSkillCard != null && selectedSkillCard.skillType == SkillType.Mirror)
+        {
+            // 获取当前双方分数
+            int myScore = gameState.GetScore(playerIndex);
+            int opponentScore = gameState.GetScore((playerIndex + 1) % 2);
+
+            Debug.Log($"镜像前 - 我方:{myScore}, 对方:{opponentScore}");
+
+            // 先计算新的分数
+            int myNewScore = result;
+
+            // 交换分数
+            gameState.AddScore(playerIndex, opponentScore);
+            gameState.AddScore((playerIndex + 1) % 2, myNewScore);
+
+            Debug.Log($"镜像后 - 玩家1: {gameState.GetScore(0)}, 玩家2: {gameState.GetScore(1)}");
+
+            // 发送分数同步消息
+            NetworkMessage scoreSyncMsg = new NetworkMessage
+            {
+                type = "ScoreSync",
+                playerIndex = playerIndex,
+                playerScores = new int[] {
+                    gameState.GetScore(0),
+                    gameState.GetScore(1)
+                }
+            };
+
+            if (playerIndex == 0)
+            {
+                TcpHost.Instance.SendTurnData(scoreSyncMsg);
+            }
+            else
+            {
+                TcpClientConnection.Instance.SendTurnData(scoreSyncMsg);
+            }
+
+            Debug.Log($"分数互换完成：我方 {myScore} -> {gameState.GetScore(playerIndex)}, 对方 {opponentScore} -> {gameState.GetScore((playerIndex + 1) % 2)}");
+        }
+        else
+        {
+            // 如果不是镜像技能，正常更新分数
+            gameState.AddScore(playerIndex, result);
+            Debug.Log($"计算后分数 - 玩家{playerIndex + 1}: {result} (原分数:{oldScore})");
+        }
 
         // 创建网络消息
         NetworkMessage message = new NetworkMessage
@@ -1309,7 +1456,6 @@ public class TurnManager : MonoBehaviour
         Card numberCard = null;
         Card operatorCard = null;
         Card extraOperatorCard = null;
-        Card skillCard = null;
 
         // 分类卡牌
         foreach (var card in playedCards)
@@ -1324,9 +1470,6 @@ public class TurnManager : MonoBehaviour
                     break;
                 case CardType.ExtraOperator:
                     extraOperatorCard = card;
-                    break;
-                case CardType.Skill:
-                    skillCard = card;
                     break;
             }
         }
@@ -1343,13 +1486,6 @@ public class TurnManager : MonoBehaviour
             result = operatorCard.Calculate(result, numberCard.numberValue);
         }
 
-        // 3. 最后执行技能牌（如果有）
-        if (skillCard != null)
-        {
-            result = skillCard.Calculate(result);
-        }
-
         return result;
     }
-
 }

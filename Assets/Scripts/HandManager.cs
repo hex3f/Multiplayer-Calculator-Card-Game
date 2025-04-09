@@ -140,13 +140,17 @@ public class HandManager : MonoBehaviour
         List<float> targetScales = new List<float>();
 
         float startX = 0f;
+        float selectedOffset = selectedCardOffset;
 
+        // 计算卡牌位置
         for (int i = 0; i < cardObjects.Count; i++)
         {
-            float targetY = selectedCards.Contains(hand[i]) ? selectedCardOffset : 0;
+            Card card = hand[i];
+            float targetY = selectedCards.Contains(card) ? selectedOffset : 0f;
             float posX = startX + (cellSize.x + spacing.x) * i;
+
             targetPositions.Add(new Vector3(posX, targetY, 0));
-            targetScales.Add(cardScale);  // 始终使用固定大小
+            targetScales.Add(cardScale);
         }
 
         currentAnimation = StartCoroutine(AnimateAllCards(targetPositions, targetScales));
