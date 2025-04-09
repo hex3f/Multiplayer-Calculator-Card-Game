@@ -329,41 +329,50 @@ public class TurnManager : MonoBehaviour
         isProcessingTurn = true;
         isPlayCard = true;
 
-        // 如果没有选择任何牌，直接跳过回合
-        //if (selectedNumberCard == null && selectedOperatorCard == null && selectedSkillCard == null)
-        //{
-        //    // 发送跳过回合消息
-        //    NetworkMessage skipMsg = new NetworkMessage
-        //    {
-        //        type = "SkipTurn",
-        //        playerIndex = playerIndex
-        //    };
-
-        //    if (playerIndex == 0)
-        //    {
-        //        TcpHost.Instance.SendTurnData(skipMsg);
-        //    }
-        //    else
-        //    {
-        //        TcpClientConnection.Instance.SendTurnData(skipMsg);
-        //    }
-
-        //    // 处理本地跳过回合
-        //    int nextPlayerIndex = (playerIndex + 1) % gameState.PlayerCount;
-        //    gameState.SetCurrentTurn(nextPlayerIndex);
-        //    Debug.Log($"手动跳过回合，切换到玩家{nextPlayerIndex + 1}的回合");
-            
-        //    hasDrawnCard = false; // 重置抽牌状态
-        //    UpdateUI();
-        //    isProcessingTurn = false;
-        //    return;
-        //}
-
-        // 如果只选择了数字牌或运算符牌，取消选择并返回
-        if ((selectedNumberCard != null && selectedOperatorCard == null) || 
-            (selectedNumberCard == null && selectedOperatorCard != null))
+        // 如果没有选择任何牌，直接返回
+        if (selectedNumberCard == null && selectedOperatorCard == null && 
+            selectedExtraOperatorCard == null && selectedSkillCard == null)
         {
-            // 取消选择
+            isProcessingTurn = false;
+            return;
+        }
+
+        // 检查出牌规则
+        bool isValidPlay = false;
+        
+        // 必须有数字牌
+        if (selectedNumberCard != null)
+        {
+            // 规则1：数字+运算符
+            if (selectedOperatorCard != null && selectedExtraOperatorCard == null && selectedSkillCard == null)
+            {
+                isValidPlay = true;
+            }
+            // 规则2：数字+特殊运算符
+            else if (selectedOperatorCard == null && selectedExtraOperatorCard != null && selectedSkillCard == null)
+            {
+                isValidPlay = true;
+            }
+            // 规则3：数字+特殊运算符+运算符
+            else if (selectedOperatorCard != null && selectedExtraOperatorCard != null && selectedSkillCard == null)
+            {
+                isValidPlay = true;
+            }
+            // 规则4：数字+运算符+技能牌
+            else if (selectedOperatorCard != null && selectedExtraOperatorCard == null && selectedSkillCard != null)
+            {
+                isValidPlay = true;
+            }
+            // 规则5：数字+特殊运算符+技能牌
+            else if (selectedOperatorCard == null && selectedExtraOperatorCard != null && selectedSkillCard != null)
+            {
+                isValidPlay = true;
+            }
+        }
+
+        if (!isValidPlay)
+        {
+            // 取消所有选择
             if (selectedNumberCard != null)
             {
                 handManager.DeselectCard(selectedNumberCard);
@@ -379,6 +388,11 @@ public class TurnManager : MonoBehaviour
                 handManager.DeselectCard(selectedExtraOperatorCard);
                 selectedExtraOperatorCard = null;
             }
+            if (selectedSkillCard != null)
+            {
+                handManager.DeselectCard(selectedSkillCard);
+                selectedSkillCard = null;
+            }
             isProcessingTurn = false;
             return;
         }
@@ -391,10 +405,7 @@ public class TurnManager : MonoBehaviour
         }
         
         // 否则处理数字和运算符
-        if (selectedNumberCard != null && selectedOperatorCard != null)
-        {
-            ProcessTurn();
-        }
+        ProcessTurn();
     }
 
     // 检查手牌上限并处理
@@ -1297,7 +1308,8 @@ public class TurnManager : MonoBehaviour
 
         Card numberCard = null;
         Card operatorCard = null;
-        Card skillOrExtraCard = null;
+        Card extraOperatorCard = null;
+        Card skillCard = null;
 
         // 分类卡牌
         foreach (var card in playedCards)
@@ -1311,22 +1323,30 @@ public class TurnManager : MonoBehaviour
                     operatorCard = card;
                     break;
                 case CardType.ExtraOperator:
+                    extraOperatorCard = card;
+                    break;
                 case CardType.Skill:
-                    skillOrExtraCard = card;
+                    skillCard = card;
                     break;
             }
         }
 
-        // 先进行普通运算
+        // 1. 先执行特殊运算符（如果有）
+        if (extraOperatorCard != null)
+        {
+            result = extraOperatorCard.Calculate(result);
+        }
+
+        // 2. 再执行普通运算符（如果有）
         if (operatorCard != null && numberCard != null)
         {
             result = operatorCard.Calculate(result, numberCard.numberValue);
         }
 
-        // 再执行技能或额外运算（只对当前 result 处理）
-        if (skillOrExtraCard != null)
+        // 3. 最后执行技能牌（如果有）
+        if (skillCard != null)
         {
-            result = skillOrExtraCard.Calculate(result);
+            result = skillCard.Calculate(result);
         }
 
         return result;
