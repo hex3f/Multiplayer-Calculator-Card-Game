@@ -548,7 +548,11 @@ public class TurnManager : MonoBehaviour
                 type = "DrawCard",
                 playerIndex = playerIndex,
                 cardsDrawn = drawnCards.Count,
-                drawnCards = drawnCards
+                drawnCards = drawnCards,
+                numberCardCount = CardDeckManager.Instance.GetNumberCardCount(),
+                operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount(),
+                extraOperatorCardCount = CardDeckManager.Instance.GetExtraOperatorCardCount(),
+                skillCardCount = CardDeckManager.Instance.GetSkillCardCount()
             });
 
             // 同步牌堆数量
@@ -557,6 +561,7 @@ public class TurnManager : MonoBehaviour
                 type = "DeckUpdate",
                 numberCardCount = CardDeckManager.Instance.GetNumberCardCount(),
                 operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount(),
+                extraOperatorCardCount = CardDeckManager.Instance.GetExtraOperatorCardCount(),
                 skillCardCount = CardDeckManager.Instance.GetSkillCardCount()
             });
 
@@ -691,8 +696,14 @@ public class TurnManager : MonoBehaviour
                 // 交换双方分数
                 int player0Score = gameState.GetScore(0);
                 int player1Score = gameState.GetScore(1);
-                gameState.AddScore(0, player1Score);
-                gameState.AddScore(1, player0Score);
+                
+                // 先保存当前分数
+                int tempScore0 = player0Score;
+                int tempScore1 = player1Score;
+                
+                // 交换分数
+                gameState.AddScore(0, tempScore1);
+                gameState.AddScore(1, tempScore0);
                 
                 // 发送分数同步消息
                 NetworkMessage scoreSyncMsg = new NetworkMessage
@@ -711,7 +722,7 @@ public class TurnManager : MonoBehaviour
                     TcpClientConnection.Instance.SendTurnData(scoreSyncMsg);
                 }
                 
-                Debug.Log($"分数互换：玩家1 {player0Score} <-> 玩家2 {player1Score}");
+                Debug.Log($"分数互换：玩家1 {tempScore0} <-> 玩家2 {tempScore1}");
                 break;
         }
 
@@ -825,18 +836,18 @@ public class TurnManager : MonoBehaviour
             playedCardsManager.AddCard(selectedExtraOperatorCard, true);
         }
 
-        // 4. 最后添加技能牌
-        //if (selectedSkillCard != null)
-        //{
-        //    Debug.Log($"添加技能牌: {selectedSkillCard.GetDisplayText()}");
-        //    playedCards.Add(selectedSkillCard);
-        //    handManager.RemoveCard(selectedSkillCard);
-        //    playedCardsManager.AddCard(selectedSkillCard, true);
-        //}
-        //else
-        //{
-        //    Debug.Log("selectedSkillCard为null，无法添加技能牌");
-        //}
+        // 4.最后添加技能牌
+        if (selectedSkillCard != null && selectedSkillCard.skillType == SkillType.Mirror)
+        {
+            Debug.Log($"添加技能牌: {selectedSkillCard.GetDisplayText()}");
+            playedCards.Add(selectedSkillCard);
+            handManager.RemoveCard(selectedSkillCard);
+            playedCardsManager.AddCard(selectedSkillCard, true);
+        }
+        else
+        {
+            Debug.Log("selectedSkillCard为null，无法添加技能牌");
+        }
 
         // 处理不同类型的运算符
         int result = CalculateResult(playedCards);
@@ -849,18 +860,13 @@ public class TurnManager : MonoBehaviour
         // 如果是镜像技能，先不更新分数，而是直接交换
         if (selectedSkillCard != null && selectedSkillCard.skillType == SkillType.Mirror)
         {
-            // 获取当前双方分数
-            int myScore = gameState.GetScore(playerIndex);
-            int opponentScore = gameState.GetScore((playerIndex + 1) % 2);
-
-            Debug.Log($"镜像前 - 我方:{myScore}, 对方:{opponentScore}");
-
             // 先计算新的分数
             int myNewScore = result;
 
             // 交换分数
-            gameState.AddScore(playerIndex, opponentScore);
-            gameState.AddScore((playerIndex + 1) % 2, myNewScore);
+            var enemys = gameState.GetScore(playerIndex == 0 ? 1 : 0);
+            gameState.AddScore(playerIndex, enemys);
+            gameState.AddScore(playerIndex == 0 ? 1 : 0, myNewScore);
 
             Debug.Log($"镜像后 - 玩家1: {gameState.GetScore(0)}, 玩家2: {gameState.GetScore(1)}");
 
@@ -883,8 +889,6 @@ public class TurnManager : MonoBehaviour
             {
                 TcpClientConnection.Instance.SendTurnData(scoreSyncMsg);
             }
-
-            Debug.Log($"分数互换完成：我方 {myScore} -> {gameState.GetScore(playerIndex)}, 对方 {opponentScore} -> {gameState.GetScore((playerIndex + 1) % 2)}");
         }
         else
         {
@@ -977,7 +981,7 @@ public class TurnManager : MonoBehaviour
         return string.Join(" ", numberStr.ToCharArray());
     }
 
-    private void UpdateUI()
+    public void UpdateUI()
     {
         // 更新回合显示
         string turnString = (gameState.IsPlayerTurn(playerIndex) ? "你的回合" : "对手回合");
@@ -1057,6 +1061,7 @@ public class TurnManager : MonoBehaviour
         {
             int numberCount = CardDeckManager.Instance.GetNumberCardCount();
             int operatorCount = CardDeckManager.Instance.GetOperatorCardCount();
+            int extraoperatorCount = CardDeckManager.Instance.GetExtraOperatorCardCount();
             int skillCount = CardDeckManager.Instance.GetSkillCardCount();
             
             Debug.Log($"[主机] 更新卡牌数量显示 - 数字:{numberCount} 运算符:{operatorCount} 技能:{skillCount}");
@@ -1070,7 +1075,12 @@ public class TurnManager : MonoBehaviour
             {
                 operatorCardCountText.text = $"运算符: {operatorCount}";
             }
-            
+
+            if (extraOperatorCardCountText != null)
+            {
+                extraOperatorCardCountText.text = $"特殊运算符: {extraoperatorCount}";
+            }
+
             if (skillCardCountText != null)
             {
                 skillCardCountText.text = $"技能牌: {skillCount}";
@@ -1472,5 +1482,10 @@ public class TurnManager : MonoBehaviour
         }
 
         return result;
+    }
+
+    public void ScoreUpdate(int s1, int s2) {
+        gameState.AddScore(0, s1);
+        gameState.AddScore(1, s2);
     }
 }

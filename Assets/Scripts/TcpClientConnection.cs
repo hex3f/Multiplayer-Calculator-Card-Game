@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using UnityEngine;
 using System.Collections.Generic;
+using static UnityEngine.PlayerLoop.EarlyUpdate;
 
 public class TcpClientConnection : MonoBehaviour
 {
@@ -166,6 +167,14 @@ public class TcpClientConnection : MonoBehaviour
                     }
                     // 然后处理常规操作
                     TurnManager.Instance.OnOpponentTurn(message);
+                    break;
+                case "ScoreSync":
+                    if (message.playerScores != null && message.playerScores.Length == 2)
+                    {
+                        TurnManager.Instance.ScoreUpdate(message.playerScores[0], message.playerScores[1]);
+                        Debug.Log($"收到分数同步：玩家1 {message.playerScores[0]}, 玩家2 {message.playerScores[1]}");
+                        TurnManager.Instance.UpdateUI();
+                    }
                     break;
                 default:
                     Debug.LogWarning($"未知消息类型: {message.type}");

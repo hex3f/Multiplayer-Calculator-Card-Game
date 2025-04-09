@@ -257,6 +257,7 @@ public class TcpHost : MonoBehaviour
             // 主机作为权威来源，更新卡牌数量信息
             message.numberCardCount = CardDeckManager.Instance.GetNumberCardCount();
             message.operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount();
+            message.extraOperatorCardCount = CardDeckManager.Instance.GetExtraOperatorCardCount();
             message.skillCardCount = CardDeckManager.Instance.GetSkillCardCount();
             
             // 记录日志以便调试
