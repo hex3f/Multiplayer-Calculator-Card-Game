@@ -87,9 +87,24 @@ public class TcpClientConnection : MonoBehaviour
         switch (message.type)
         {
             case "GameStart":
-                // 收到游戏开始信号，生成自己的初始手牌
-                List<Card> initialHand = CardDeckManager.Instance.GenerateInitialHand();
-                ConnectUI.Instance.OnGameStart(initialHand);
+                // 收到游戏开始信号和初始手牌
+                if (message.initialHand != null)
+                {
+                    // 同步牌堆数量
+                    CardDeckManager.Instance.SyncCardCounts(
+                        message.numberCardCount,
+                        message.operatorCardCount,
+                        message.extraOperatorCardCount,
+                        message.skillCardCount
+                    );
+                    
+                    // 使用服务器发送的初始手牌
+                    ConnectUI.Instance.OnGameStart(message.initialHand);
+                }
+                else
+                {
+                    Debug.LogError("未收到初始手牌数据");
+                }
                 break;
             case "DeckUpdate":
                 // 处理牌库数量更新

@@ -94,6 +94,7 @@ public class CardDeckManager : MonoBehaviour
             if (card != null)
             {
                 hand.Add(card);
+                Debug.Log($"抽到数字牌: {card.GetDisplayText()}, 牌堆剩余数字牌: {GetNumberCardCount()}");
             }
         }
 
@@ -110,6 +111,7 @@ public class CardDeckManager : MonoBehaviour
             if (operatorCard != null)
             {
                 hand.Add(operatorCard);
+                Debug.Log($"抽到运算符牌: {operatorCard.GetDisplayText()}, 牌堆剩余运算符牌: {GetOperatorCardCount()}");
             }
         }
 
@@ -126,6 +128,7 @@ public class CardDeckManager : MonoBehaviour
             if (extraOperatorCard != null)
             {
                 hand.Add(extraOperatorCard);
+                Debug.Log($"抽到特殊运算符牌: {extraOperatorCard.GetDisplayText()}, 牌堆剩余特殊运算符牌: {GetExtraOperatorCardCount()}");
             }
         }
 
@@ -140,13 +143,11 @@ public class CardDeckManager : MonoBehaviour
         if (skillCard != null)
         {
             hand.Add(skillCard);
+            Debug.Log($"抽到技能牌: {skillCard.GetDisplayText()}, 牌堆剩余技能牌: {GetSkillCardCount()}");
         }
 
-        Debug.Log($"生成初始手牌: {hand.Count}张, 牌库剩余: {deck.Count}张, 数字牌:{GetNumberCardCount()}, 运算符:{GetOperatorCardCount()}, 技能牌:{GetSkillCardCount()}");
-        foreach (var card in hand)
-        {
-            Debug.Log($"手牌: {card.GetDisplayText()}");
-        }
+        Debug.Log($"生成初始手牌完成，手牌数量: {hand.Count}张");
+        Debug.Log($"牌堆剩余: 总牌数:{deck.Count}张, 数字牌:{GetNumberCardCount()}, 运算符:{GetOperatorCardCount()}, 特殊运算符:{GetExtraOperatorCardCount()}, 技能牌:{GetSkillCardCount()}");
 
         return hand;
     }
@@ -236,11 +237,13 @@ public class CardDeckManager : MonoBehaviour
     public void SyncCardCounts(int numberCount, int operatorCount, int extraOperatorCount, int skillCount)
     {
         // 这个方法用于客户端接收服务器同步的牌库数量
-        // 我们不直接修改deck，因为客户端不处理具体的牌，只需要知道牌库数量
         Debug.Log($"同步牌库数量: 数字:{numberCount} 运算符:{operatorCount} 特殊运算符:{extraOperatorCount} 技能:{skillCount}");
         
-        // 可以在这里添加逻辑来模拟牌库数量变化的视觉效果
-        // 例如显示抽牌动画等
+        // 更新UI显示
+        if (TurnManager.Instance != null)
+        {
+            TurnManager.Instance.UpdateCardCountDisplay(numberCount, operatorCount, extraOperatorCount, skillCount);
+        }
     }
 
     // 获取牌库剩余总数

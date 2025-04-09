@@ -144,9 +144,6 @@ public class ConnectUI : MonoBehaviour
 
     public void OnGameStart(List<Card> initialHand)
     {
-        // 初始化牌堆
-        CardDeckManager.Instance.InitializeDeck();
-        
         // 开始游戏
         TurnManager.Instance.StartGame(initialHand);
         

@@ -108,33 +108,25 @@ public class TcpHost : MonoBehaviour
                                 // 初始化牌堆（确保只初始化一次）
                                 CardDeckManager.Instance.InitializeDeck();
                                 
-                                // 发送游戏开始信号给客户端
+                                // 生成主机和客户端的初始手牌
+                                List<Card> hostInitialHand = CardDeckManager.Instance.GenerateInitialHand();
+                                List<Card> clientInitialHand = CardDeckManager.Instance.GenerateInitialHand();
+                                
+                                // 发送游戏开始信号和客户端初始手牌给客户端
                                 NetworkMessage startMsg = new NetworkMessage
                                 {
                                     type = "GameStart",
-                                    playerIndex = 0
+                                    playerIndex = 0,
+                                    initialHand = clientInitialHand,
+                                    numberCardCount = CardDeckManager.Instance.GetNumberCardCount(),
+                                    operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount(),
+                                    extraOperatorCardCount = CardDeckManager.Instance.GetExtraOperatorCardCount(),
+                                    skillCardCount = CardDeckManager.Instance.GetSkillCardCount()
                                 };
                                 SendTurnData(startMsg);
                                 
-                                // 主机玩家生成初始手牌
-                                List<Card> initialHand = CardDeckManager.Instance.GenerateInitialHand();
-                                
-                                // 模拟客户端抽牌以正确计算牌库
-                                List<Card> clientInitialHand = CardDeckManager.Instance.GenerateInitialHand();
-                                Debug.Log($"[主机] 为客户端生成初始手牌，牌库剩余: {CardDeckManager.Instance.GetDeckCount()}张");
-                                
                                 // 通知UI系统开始游戏
-                                ConnectUI.Instance.OnGameStart(initialHand);
-                                
-                                // 发送一次牌库数量更新
-                                NetworkMessage deckUpdateMsg = new NetworkMessage
-                                {
-                                    type = "DeckUpdate",
-                                    numberCardCount = CardDeckManager.Instance.GetNumberCardCount(),
-                                    operatorCardCount = CardDeckManager.Instance.GetOperatorCardCount(),
-                                    skillCardCount = CardDeckManager.Instance.GetSkillCardCount()
-                                };
-                                SendTurnData(deckUpdateMsg);
+                                ConnectUI.Instance.OnGameStart(hostInitialHand);
                             }
                         }
                         else if (message.type == "RequestTargetNumber")

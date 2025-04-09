@@ -5,19 +5,21 @@ public class NetworkMessage
 {
     public string type;
     public int playerIndex;
+    public int targetNumber;
     public List<Card> playedCards;
+    public List<Card> drawnCards;
+    public int cardsDrawn;
+    public int numberCardCount;
+    public int operatorCardCount;
+    public int extraOperatorCardCount;
+    public int skillCardCount;
+    public int playerScore;
+    public int opponentScore;
+    public bool isFrozen;
+    public List<Card> initialHand;
     public Card skillCard;
     public int result;
-    public int targetNumber;
     public bool isSkillSuccess;
     public int[] playerScores;
     public bool skipTurn;
-    public int cardsDrawn;
-    public List<Card> drawnCards;
-    
-    // 添加卡牌数量同步字段
-    public int numberCardCount;   // 数字牌剩余数量
-    public int operatorCardCount; // 运算符牌剩余数量
-    public int extraOperatorCardCount; // 特殊运算符牌剩余数量
-    public int skillCardCount;    // 技能牌剩余数量
 }
