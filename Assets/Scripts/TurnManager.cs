@@ -532,16 +532,57 @@ public class TurnManager : MonoBehaviour
         {
             List<Card> drawnCards = new List<Card>();
 
-            for (int i = 0; i < cardsToDraw; i++)
+            // 从牌库抽取一张数字牌和一张运算符牌
+            // 先抽数字牌
+            Card numberCard = null;
+            int attempts = 0;
+            while (numberCard == null && attempts < 10) // 设置最大尝试次数防止死循环
             {
-                Card newCard = CardDeckManager.Instance.DrawCard();
-                if (newCard != null)
+                Card card = CardDeckManager.Instance.DrawCard();
+                if (card != null && card.type == CardType.Number)
                 {
-                    handManager.AddCard(newCard);
-                    drawnCards.Add(newCard);
-                    Debug.Log($"抽到新牌: {newCard.GetDisplayText()}");
+                    numberCard = card;
+                    drawnCards.Add(card);
+                    handManager.AddCard(card);
                 }
+                else if (card != null)
+                {
+                    // 如果不是数字牌，放回牌堆底部
+                    CardDeckManager.Instance.DiscardCard(card);
+                }
+                attempts++;
             }
+
+            // 再抽运算符牌
+            Card operatorCard = null;
+            attempts = 0;
+            while (operatorCard == null && attempts < 10) // 设置最大尝试次数防止死循环
+            {
+                Card card = CardDeckManager.Instance.DrawCard();
+                if (card != null && card.type == CardType.Operator)
+                {
+                    operatorCard = card;
+                    drawnCards.Add(card);
+                    handManager.AddCard(card);
+                }
+                else if (card != null)
+                {
+                    // 如果不是运算符牌，放回牌堆底部
+                    CardDeckManager.Instance.DiscardCard(card);
+                }
+                attempts++;
+            }
+
+            //for (int i = 0; i < cardsToDraw; i++)
+            //{
+            //    Card newCard = CardDeckManager.Instance.DrawCard();
+            //    if (newCard != null)
+            //    {
+            //        handManager.AddCard(newCard);
+            //        drawnCards.Add(newCard);
+            //        Debug.Log($"抽到新牌: {newCard.GetDisplayText()}");
+            //    }
+            //}
 
             // 同步抽牌信息
             TcpHost.Instance.SendTurnData(new NetworkMessage

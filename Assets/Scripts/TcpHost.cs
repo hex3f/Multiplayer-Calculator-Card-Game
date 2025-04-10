@@ -176,18 +176,48 @@ public class TcpHost : MonoBehaviour
                             
                             // 创建临时列表记录抽到的牌
                             List<Card> drawnCards = new List<Card>();
-                            
-                            // 从牌库抽取请求的牌数
-                            for (int i = 0; i < message.cardsDrawn; i++)
+
+                            // 从牌库抽取一张数字牌和一张运算符牌
+                            // 先抽数字牌
+                            Card numberCard = null;
+                            int attempts = 0;
+                            while (numberCard == null && attempts < 10) // 设置最大尝试次数防止死循环
                             {
                                 Card card = CardDeckManager.Instance.DrawCard();
-                                if (card != null)
+                                if (card != null && card.type == CardType.Number)
                                 {
+                                    numberCard = card;
                                     drawnCards.Add(card);
-                                    Debug.Log($"为玩家{message.playerIndex+1}抽出卡牌: {card.GetDisplayText()}");
+                                    Debug.Log($"为玩家{message.playerIndex + 1}抽出数字牌: {card.GetDisplayText()}");
                                 }
+                                else if (card != null)
+                                {
+                                    // 如果不是数字牌，放回牌堆底部
+                                    CardDeckManager.Instance.DiscardCard(card);
+                                }
+                                attempts++;
                             }
-                            
+
+                            // 再抽运算符牌
+                            Card operatorCard = null;
+                            attempts = 0;
+                            while (operatorCard == null && attempts < 10) // 设置最大尝试次数防止死循环
+                            {
+                                Card card = CardDeckManager.Instance.DrawCard();
+                                if (card != null && card.type == CardType.Operator)
+                                {
+                                    operatorCard = card;
+                                    drawnCards.Add(card);
+                                    Debug.Log($"为玩家{message.playerIndex + 1}抽出运算符牌: {card.GetDisplayText()}");
+                                }
+                                else if (card != null)
+                                {
+                                    // 如果不是运算符牌，放回牌堆底部
+                                    CardDeckManager.Instance.DiscardCard(card);
+                                }
+                                attempts++;
+                            }
+
                             // 构建包含抽出卡牌的响应消息
                             NetworkMessage drawResponse = new NetworkMessage
                             {
